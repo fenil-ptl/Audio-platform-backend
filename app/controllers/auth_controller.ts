@@ -8,35 +8,29 @@ import AuthService from '#services/auth_service'
 import { forgotPasswordValidator } from '#validators/forgot_password'
 import { resetPasswordValidator } from '#validators/resetpassword'
 import { resendVerificationEmailValidator } from '#validators/resend_verification_email'
-import PasswordResetToken from '#models/password_reset_token'
 
 export default class AuthController {
   public async register({ request, response }: HttpContext) {
     try {
       const payload = await request.validateUsing(registerValidator)
 
-      const user = await AuthService.register(payload)
-
-      const token = await AuthService.generateToken(user)
+      const { user, verificationUrl } = await AuthService.register(payload)
 
       return response.status(201).send({
         message: 'Registration successful please verify your email',
-        token: {
-          type: 'bearer',
-          value: token.value!.release(),
-        },
+        verificationUrl,
         user: user.serialize(),
       })
     } catch (error) {
       return response.status(400).send({
         messages: 'Registration failed | Bad Request ',
-        error: error.message,
+        error: error.messages,
       })
     }
   }
 
   public async verifyEmail({ request }: HttpContext) {
-    await AuthService.verifyEmail(request.qs().token)
+    await AuthService.verifyEmail(request)
     return `email verify`
   }
 
@@ -55,22 +49,22 @@ export default class AuthController {
         },
       })
     } catch (error) {
-      const message =
-        error.message === 'ACCOUNT_DISABLED'
-          ? 'Please verify your email before logging in.'
-          : 'Invalid email or password.'
       return response.status(400).send({
-        message,
+        message: 'Please verify your credentials',
         error: error,
       })
     }
   }
   public async logout({ auth, response }: HttpContext) {
-    // const user = auth.getUserOrFail()
-    const user = auth.use('api').user!
-    const tokenIdentifier = user.currentAccessToken.identifier
-    await User.accessTokens.delete(user, tokenIdentifier)
-    return response.ok({ message: 'Logged out' })
+    const user = auth.getUserOrFail()
+
+    const token = user.currentAccessToken
+
+    if (!token) {
+      return response.unauthorized({ message: 'no active token found' })
+    }
+    await User.accessTokens.delete(user, token.identifier)
+    return response.ok({ message: 'Logged out', userId: user.id })
   }
 
   public async me({ auth }: HttpContext) {
@@ -82,30 +76,24 @@ export default class AuthController {
 
     const data = email.email
 
-    const token = await AuthService.sendResetEmail(data)
+    const url = await AuthService.sendResetEmail(data)
 
     return response.ok({
       mail: data,
-      token: token,
-      url: ` reset link : http://localhost:3333/forget-password/reset-password?token=${token}`,
+      url: url,
     })
   }
 
   public async resetPassword({ request, response }: HttpContext) {
-    const { token, password } = await request.validateUsing(resetPasswordValidator)
-
-    const rawRecord = await PasswordResetToken.query().where('token', token).first()
-
-    console.log('token from DB:', JSON.stringify(rawRecord?.token))
+    const { password } = await request.validateUsing(resetPasswordValidator)
 
     try {
-      await AuthService.resetPassword(token, password)
+      await AuthService.resetPassword(request, password)
 
       return response.ok({
         message: 'Password has been reset successfully. You can now log in.',
       })
     } catch (error) {
-      console.error('reset pass err =', error)
       return response.badRequest({
         message: 'invalid or expire token ',
         error: error.message,
@@ -118,20 +106,19 @@ export default class AuthController {
     try {
       const result = await AuthService.resendVerificationEmail(email)
 
-      if (result?.message === 'User not Found') {
-        return response.notFound({ message: result.message })
-      }
-
-      if (result?.message === 'User Already Verified') {
-        return response.conflict({ message: result.message })
-      }
-
       return response.ok({
         message: 'Verification email sent successfully.',
         result,
       })
     } catch (error) {
-      console.error('resendVerificationEmail error:', error)
+      if (error.message === 'USER_NOT_FOUND') {
+        return response.notFound({ message: 'User not found' })
+      }
+
+      if (error.message === 'EMAIL_IS_ALREADY_VERIFIED') {
+        return response.notFound({ message: 'email is already verified' })
+      }
+
       return response.internalServerError({
         message: 'Failed to send verification email.',
         error: error.message,

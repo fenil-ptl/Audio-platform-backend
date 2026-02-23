@@ -10,7 +10,6 @@ export default class RoleMiddleware {
   async handle(ctx: HttpContext, next: NextFn, allowedRoles: string[]) {
     // 1. Get user from auth (must run after auth middleware)
     const user = ctx.auth.user as User
-    console.log('user=', user)
 
     // 2. If user doesn't exist or role isn't in the allowed list, block them
     if (!user || !allowedRoles.includes(user.role)) {

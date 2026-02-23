@@ -1,72 +1,70 @@
-/*
-|--------------------------------------------------------------------------
-| Routes file
-|--------------------------------------------------------------------------
-|
-| The routes file is used for defining the HTTP routes.
-|
-*/
-
 import router from '@adonisjs/core/services/router'
 import { middleware } from './kernel.js'
 
-router.get('/', async () => {
-  return {
-    hello: 'world',
-  }
-})
-
-router.get('/home', async () => {
-  return {
-    title: 'home page',
-  }
-})
-
 const authRegisterController = () => import('#controllers/auth_controller')
-router.post('/auth/register', [authRegisterController, 'register'])
-router.get('/auth/register/verify-email', [authRegisterController, 'verifyEmail'])
 
-router.post('/auth/login', [authRegisterController, 'login'])
+router
+  .group(() => {
+    router.post('/register', [authRegisterController, 'register'])
+    router
+      .get('/register/verify-email/:id', [authRegisterController, 'verifyEmail'])
+      .as('verifyEmail')
+    router.post('/login', [authRegisterController, 'login'])
 
-router.post('/auth/forget-password', [authRegisterController, 'forgetPassword'])
-router.post('/auth/forget-password/reset-password', [authRegisterController, 'resetPassword'])
-router.post('/auth/logout', [authRegisterController, 'logout']).use(middleware.auth())
-router.post('/auth/profile', [authRegisterController, 'me']).use(middleware.auth())
-router.post('/auth/resend-verification', [authRegisterController, 'resendVerificationEmail'])
+    router.post('/forget-password', [authRegisterController, 'forgetPassword'])
 
+    router.post('/forget-password/reset-password', [authRegisterController, 'resetPassword'])
+
+    router
+      .post('/logout', [authRegisterController, 'logout'])
+      .middleware([middleware.auth(), middleware.verifyEmail()])
+
+    router
+      .post('/profile', [authRegisterController, 'me'])
+      .middleware([middleware.auth(), middleware.verifyEmail()])
+
+    router.post('/resend-verification', [authRegisterController, 'resendVerificationEmail'])
+  })
+  .prefix('/auth')
+
+//seller routes
 const audioController = () => import('#controllers/audio_controller')
-
 router
   .group(() => {
-    // seller ONLY
-    router.post('/seller/tracks', [audioController, 'store']).use(middleware.role(['seller']))
-
-    // SELLER only
-    router.get('/seller/tracks', [audioController, 'index']).use(middleware.role(['seller']))
-
-    router.get('/seller/tracks/:id', [audioController, 'show']).use(middleware.role(['seller']))
+    router.post('/', [audioController, 'store'])
+    router.get('/', [audioController, 'index'])
+    router.get('/:id', [audioController, 'show'])
   })
-  .use(middleware.auth())
+  .prefix('/seller/tracks')
+  .middleware([middleware.auth(), middleware.role(['seller']), middleware.verifyEmail()])
 
+//admin routes
 router
   .group(() => {
-    // admin ONLY
-
-    // admin only
-    router
-      .get('/admin/tracks/pending', [audioController, 'pendingTracks'])
-      .use(middleware.role(['admin']))
-
-    router
-      .patch('/admin/tracks/:id/approve', [audioController, 'approveTrack'])
-      .use(middleware.role(['admin']))
-
-    // router
-    //   .patch('/admin/tracks/:id/rejected', [audioController, 'index'])
-    //   .use(middleware.role(['admin']))
-
-    // router.patch('/admin/genres', [audioController, 'index']).use(middleware.role(['admin']))
-
-    // router.patch('/admin/moods', [audioController, 'index']).use(middleware.role(['admin']))
+    router.get('/tracks/pending', [audioController, 'pendingTracks'])
+    router.patch('/tracks/:id/approve', [audioController, 'approveTrack'])
+    router.patch('/tracks/:id/rejected', [audioController, 'rejectTrack'])
+    router.post('/genres', [audioController, 'genres'])
+    router.post('/moods', [audioController, 'mood'])
+    router.patch('/genres/:id', [audioController, 'editGenres'])
+    router.delete('/genres/:id', [audioController, 'deleteGenre'])
+    router.patch('/moods/:id', [audioController, 'editMood'])
+    router.delete('/moods/:id', [audioController, 'deleteMood'])
   })
-  .use(middleware.auth())
+  .prefix('/admin')
+  .middleware([middleware.auth(), middleware.verifyEmail(), middleware.role(['admin'])])
+
+const publicController = () => import('#controllers/public_controller')
+router
+  .group(() => {
+    router.get('/', [publicController, 'index'])
+    router
+      .get('/:id', [publicController, 'show'])
+      .middleware([middleware.auth(), middleware.role(['user']), middleware.verifyEmail()])
+  })
+  .prefix('/track')
+
+const audioTrackController = () => import('#controllers/audio_tracks_controller')
+router
+  .get('/admin/tracks/export', [audioTrackController, 'export'])
+  .middleware([middleware.auth(), middleware.role(['admin']), middleware.verifyEmail()])

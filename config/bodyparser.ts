@@ -44,7 +44,7 @@ const bodyParserConfig = defineConfig({
     processManually: [],
 
     /**
-     * Maximum limit of data to parse including all files
+     * Maximum limit of data to parse including all true
      * and fields
      */
     limit: '20mb',

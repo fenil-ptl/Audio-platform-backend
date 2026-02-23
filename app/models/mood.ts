@@ -2,6 +2,9 @@ import { DateTime } from 'luxon'
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 
 export default class Mood extends BaseModel {
+  static merge(_payload: any) {
+    throw new Error('Method not implemented.')
+  }
   @column({ isPrimary: true })
   declare id: number
 
