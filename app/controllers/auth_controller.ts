@@ -14,24 +14,43 @@ export default class AuthController {
     try {
       const payload = await request.validateUsing(registerValidator)
 
-      const { user, verificationUrl } = await AuthService.register(payload)
+      const { user } = await AuthService.register(payload)
 
       return response.status(201).send({
         message: 'Registration successful please verify your email',
-        verificationUrl,
         user: user.serialize(),
       })
     } catch (error) {
+      if (error.message === 'EMAIL_ALREADY_EXISTS') {
+        return response.conflict({
+          message: 'An account with this email already exists',
+        })
+      }
       return response.status(400).send({
-        messages: 'Registration failed | Bad Request ',
-        error: error.messages,
+        message: 'Registration failed',
+        errors: error.messages || [error.message],
       })
     }
   }
 
-  public async verifyEmail({ request }: HttpContext) {
-    await AuthService.verifyEmail(request)
-    return `email verify`
+  public async verifyEmail({ request, response }: HttpContext) {
+    try {
+      const user = await AuthService.verifyEmail(request)
+      return response.ok({
+        message: `email verify successfully now you can log in`,
+        user: user,
+      })
+    } catch (error) {
+      if (error.message === 'INVALID_OR_EXPIRED_LINK') {
+        return response.badRequest({
+          message: 'Verification link is invalid or has expired. Please request a new one.',
+        })
+      }
+
+      return response.status(400).send({
+        message: error.message,
+      })
+    }
   }
 
   public async login({ request, response }: HttpContext) {
@@ -41,7 +60,7 @@ export default class AuthController {
       const user = await AuthService.verifyCredentials(email, password)
       const token = await AuthService.generateToken(user)
       return response.send({
-        message: 'user log in successfully',
+        message: 'user logged in successfully',
         user: user.serialize(),
         token: {
           type: 'bearer',
@@ -49,6 +68,17 @@ export default class AuthController {
         },
       })
     } catch (error) {
+      if (error.message === 'INVALID_CREDENTIALS') {
+        return response.unauthorized({
+          message: 'Invalid email or password',
+        })
+      }
+      if (error.message === 'EMAIL_NOT_VERIFIED') {
+        return response.forbidden({
+          message: 'Please verify your email before logging in',
+          code: 'EMAIL_NOT_VERIFIED',
+        })
+      }
       return response.status(400).send({
         message: 'Please verify your credentials',
         error: error,
@@ -64,7 +94,7 @@ export default class AuthController {
       return response.unauthorized({ message: 'no active token found' })
     }
     await User.accessTokens.delete(user, token.identifier)
-    return response.ok({ message: 'Logged out', userId: user.id })
+    return response.ok({ message: 'Logged out successfully' })
   }
 
   public async me({ auth }: HttpContext) {
@@ -72,23 +102,25 @@ export default class AuthController {
   }
 
   public async forgetPassword({ request, response }: HttpContext) {
-    const email = await request.validateUsing(forgotPasswordValidator)
+    const { email } = await request.validateUsing(forgotPasswordValidator)
 
-    const data = email.email
+    // const data = email.email
 
-    const url = await AuthService.sendResetEmail(data)
+    await AuthService.sendResetEmail(email)
 
     return response.ok({
-      mail: data,
-      url: url,
+      message: 'if an account exist with this email, you will receive the reset password link',
     })
   }
 
   public async resetPassword({ request, response }: HttpContext) {
+    const isValidSignature = request.hasValidSignature()
     const { password } = await request.validateUsing(resetPasswordValidator)
 
+    const userId = request.param('id')
+
     try {
-      await AuthService.resetPassword(request, password)
+      await AuthService.resetPassword(Number(userId), isValidSignature, password)
 
       return response.ok({
         message: 'Password has been reset successfully. You can now log in.',
@@ -104,11 +136,10 @@ export default class AuthController {
     const { email } = await request.validateUsing(resendVerificationEmailValidator)
 
     try {
-      const result = await AuthService.resendVerificationEmail(email)
+      await AuthService.resendVerificationEmail(email)
 
       return response.ok({
         message: 'Verification email sent successfully.',
-        result,
       })
     } catch (error) {
       if (error.message === 'USER_NOT_FOUND') {

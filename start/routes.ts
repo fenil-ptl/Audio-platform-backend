@@ -13,7 +13,9 @@ router
 
     router.post('/forget-password', [authRegisterController, 'forgetPassword'])
 
-    router.post('/forget-password/reset-password', [authRegisterController, 'resetPassword'])
+    router
+      .post('/forget-password/reset-password/:id', [authRegisterController, 'resetPassword'])
+      .as('resetPassword')
 
     router
       .post('/logout', [authRegisterController, 'logout'])

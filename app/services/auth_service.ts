@@ -1,8 +1,6 @@
-import { DateTime } from 'luxon'
 import hash from '@adonisjs/core/services/hash'
 import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
-import PasswordResetToken from '#models/password_reset_token'
 import { HttpContext } from '@adonisjs/core/http'
 import router from '@adonisjs/core/services/router'
 
@@ -23,14 +21,12 @@ export default class AuthService {
       isEmailVerified: false,
     })
 
-    const verificationUrl = await this.sendVerificationEmail(user)
+    this.sendVerificationEmail(user)
 
-    return { user, verificationUrl }
+    return { user }
   }
 
   static async sendVerificationEmail(user: User) {
-    // Clear any existing tokens for this user
-
     const signedUrl = router.makeSignedUrl(
       'verifyEmail',
       { id: user.id },
@@ -38,9 +34,8 @@ export default class AuthService {
         expiresIn: '24h',
       }
     )
-    console.log('sign url=', signedUrl)
 
-    mail.send((message) => {
+    await mail.send((message) => {
       message.to(user.email).subject('Verify your account').html(`
           <h2>Welcome ${user.fullName}</h2>
           <p>Click below to verify your account:</p>
@@ -49,23 +44,21 @@ export default class AuthService {
           </a>
         `)
     })
-    return signedUrl
   }
 
   static async verifyEmail(request: HttpContext['request']) {
     if (!request.hasValidSignature()) {
-      throw new Error(' Invalid or Expire Link ')
+      throw new Error('INVALID_OR_EXPIRED_LINK')
     }
 
     const userId = request.param('id')
-
-    // const userId = request.input('id')
-    console.log('userID=', userId)
 
     const user = await User.findOrFail(userId)
 
     user.isEmailVerified = true
     await user.save()
+
+    return user
   }
 
   static async verifyCredentials(email: string, password: string) {
@@ -81,7 +74,7 @@ export default class AuthService {
     }
 
     if (!user.isEmailVerified) {
-      throw new Error('please verify email')
+      throw new Error('EMAIL_NOT_VERIFIED')
     }
 
     return user
@@ -95,34 +88,30 @@ export default class AuthService {
     await User.accessTokens.delete(user, tokenId)
   }
 
-    static async sendResetEmail(email: string) {
-      const user = await User.findBy('email', email)
+  static async sendResetEmail(email: string) {
+    const user = await User.findBy('email', email)
 
-      if (!user) {
-        return `no user found check again `
+    if (!user) {
+      return
+    }
+    const signedUrl = router.makeSignedUrl(
+      'resetPassword',
+      { id: user.id },
+      {
+        expiresIn: '15m',
       }
-      const signedUrl = router.makeSignedUrl(
-        'resetPassword',
-        { id: user.id },
-        {
-          expiresIn: '15m',
-        }
-      )
+    )
 
-      console.log('sign url=', signedUrl)
-
-      mail.send((message) => {
-        message.to(user.email).subject('Reset your password').html(`
+    await mail.send((message) => {
+      message.to(user.email).subject('Reset your password').html(`
             <h2>Password Reset</h2>
             <p>You requested a password reset. Click the link below:</p>
             <a href="http://localhost:3333${signedUrl}">
               Reset Password
             </a>
           `)
-      })
-
-      return signedUrl
-    }
+    })
+  }
 
   static async resendVerificationEmail(email: string) {
     const user = await User.findBy('email', email)
@@ -138,21 +127,21 @@ export default class AuthService {
     return url
   }
 
-  static async resetPassword(request: HttpContext['request'], newPassword: string) {
-    if (!request.hasValidSignature) {
+  static async resetPassword(userId: number, isValidSignature: boolean, newPassword: string) {
+    if (!isValidSignature) {
       throw new Error('INVALID_OR_EXPIRE_LINK')
     }
-    const userId = request.param('id')
     const user = await User.findOrFail(userId)
 
-    user.password = await hash.make(newPassword)
-
+    user.password = newPassword
     await user.save()
 
-    await User.accessTokens.query().where('tokenable_id', user.id).delete()
+    await User.accessTokens.all(user).then((tokens) => {
+      return Promise.all(tokens.map((token) => User.accessTokens.delete(user, token.identifier)))
+    })
 
     return {
-      message: 'password reset successfully',
+      message: 'Password reset successfully',
     }
   }
 }
