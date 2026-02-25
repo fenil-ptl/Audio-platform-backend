@@ -5,7 +5,7 @@ import { HttpContext } from '@adonisjs/core/http'
 import router from '@adonisjs/core/services/router'
 
 export default class AuthService {
-  static async register(data: {
+  async register(data: {
     fullName: string
     email: string
     password: string
@@ -26,7 +26,7 @@ export default class AuthService {
     return { user }
   }
 
-  static async sendVerificationEmail(user: User) {
+  async sendVerificationEmail(user: User) {
     const signedUrl = router.makeSignedUrl(
       'verifyEmail',
       { id: user.id },
@@ -46,7 +46,7 @@ export default class AuthService {
     })
   }
 
-  static async verifyEmail(request: HttpContext['request']) {
+  async verifyEmail(request: HttpContext['request']) {
     if (!request.hasValidSignature()) {
       throw new Error('INVALID_OR_EXPIRED_LINK')
     }
@@ -61,7 +61,7 @@ export default class AuthService {
     return user
   }
 
-  static async verifyCredentials(email: string, password: string) {
+  async verifyCredentials(email: string, password: string) {
     const user = await User.findBy('email', email)
 
     if (!user) {
@@ -80,15 +80,15 @@ export default class AuthService {
     return user
   }
 
-  static async generateToken(user: User) {
+  async generateToken(user: User) {
     return await User.accessTokens.create(user)
   }
 
-  static async invalidateToken(user: User, tokenId: string) {
+  async invalidateToken(user: User, tokenId: string) {
     await User.accessTokens.delete(user, tokenId)
   }
 
-  static async sendResetEmail(email: string) {
+  async sendResetEmail(email: string) {
     const user = await User.findBy('email', email)
 
     if (!user) {
@@ -113,7 +113,7 @@ export default class AuthService {
     })
   }
 
-  static async resendVerificationEmail(email: string) {
+  async resendVerificationEmail(email: string) {
     const user = await User.findBy('email', email)
 
     if (!user) {
@@ -127,7 +127,7 @@ export default class AuthService {
     return url
   }
 
-  static async resetPassword(userId: number, isValidSignature: boolean, newPassword: string) {
+  async resetPassword(userId: number, isValidSignature: boolean, newPassword: string) {
     if (!isValidSignature) {
       throw new Error('INVALID_OR_EXPIRE_LINK')
     }

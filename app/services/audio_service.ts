@@ -2,7 +2,9 @@ import User from '#models/user'
 import Audio from '#models/audio'
 import Genre from '#models/genre'
 import Mood from '#models/mood'
-interface CreateAudioServicePayload {
+import { inject } from '@adonisjs/core'
+
+export interface CreateAudioPayload {
   title: string
   slug: string
   bpm: number
@@ -12,17 +14,17 @@ interface CreateAudioServicePayload {
   fileUrl: string
   imageUrl: string
 }
-interface CreateGenre {
+export interface CreateGenre {
   name: 'pop' | 'rock' | 'folk' | 'electronic' | 'jazz'
   slug: string
 }
-interface CreateMood {
+export interface CreateMood {
   name: string
   slug: string
 }
-
+@inject()
 export class AudioService {
-  async create(user: User, payload: CreateAudioServicePayload): Promise<Audio> {
+  async create(user: User, payload: CreateAudioPayload): Promise<Audio> {
     if (payload.status === 'reject' && !payload.rejectReason) {
       throw new Error('Reject reason is required when status is reject')
     }
@@ -54,6 +56,9 @@ export class AudioService {
   }
 
   async getById(id: number): Promise<Audio> {
+    if (id < 1) {
+      throw new Error('INVALID_AUDIO_ID')
+    }
     const audio = await Audio.findOrFail(id)
 
     return audio

@@ -54,10 +54,13 @@
     "@adonisjs/auth": "^9.6.0",
     "@adonisjs/core": "^6.18.0",
     "@adonisjs/cors": "^2.2.1",
+    "@adonisjs/drive": "^3.4.1",
+    "@adonisjs/limiter": "^2.4.0",
     "@adonisjs/lucid": "^21.6.1",
     "@adonisjs/mail": "^9.2.2",
     "@maximemrf/adonisjs-jwt": "^0.7.0",
     "@vinejs/vine": "^3.0.1",
+    "csv-stringify": "^6.6.0",
     "luxon": "^3.7.2",
     "mysql2": "^3.17.1",
     "reflect-metadata": "^0.2.2"

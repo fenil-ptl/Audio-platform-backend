@@ -1,5 +1,3 @@
-// import type { HttpContext } from '@adonisjs/core/http'
-
 import { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
 import { registerValidator } from '#validators/register'
@@ -8,13 +6,16 @@ import AuthService from '#services/auth_service'
 import { forgotPasswordValidator } from '#validators/forgot_password'
 import { resetPasswordValidator } from '#validators/resetpassword'
 import { resendVerificationEmailValidator } from '#validators/resend_verification_email'
+import { inject } from '@adonisjs/core'
 
+@inject()
 export default class AuthController {
+  constructor(private service: AuthService) {}
   public async register({ request, response }: HttpContext) {
     try {
       const payload = await request.validateUsing(registerValidator)
 
-      const { user } = await AuthService.register(payload)
+      const { user } = await this.service.register(payload)
 
       return response.status(201).send({
         message: 'Registration successful please verify your email',
@@ -35,7 +36,7 @@ export default class AuthController {
 
   public async verifyEmail({ request, response }: HttpContext) {
     try {
-      const user = await AuthService.verifyEmail(request)
+      const user = await this.service.verifyEmail(request)
       return response.ok({
         message: `email verify successfully now you can log in`,
         user: user,
@@ -57,8 +58,8 @@ export default class AuthController {
     const { email, password } = await request.validateUsing(loginValidator)
 
     try {
-      const user = await AuthService.verifyCredentials(email, password)
-      const token = await AuthService.generateToken(user)
+      const user = await this.service.verifyCredentials(email, password)
+      const token = await this.service.generateToken(user)
       return response.send({
         message: 'user logged in successfully',
         user: user.serialize(),
@@ -106,7 +107,7 @@ export default class AuthController {
 
     // const data = email.email
 
-    await AuthService.sendResetEmail(email)
+    await this.service.sendResetEmail(email)
 
     return response.ok({
       message: 'if an account exist with this email, you will receive the reset password link',
@@ -120,7 +121,7 @@ export default class AuthController {
     const userId = request.param('id')
 
     try {
-      await AuthService.resetPassword(Number(userId), isValidSignature, password)
+      await this.service.resetPassword(Number(userId), isValidSignature, password)
 
       return response.ok({
         message: 'Password has been reset successfully. You can now log in.',
@@ -136,7 +137,7 @@ export default class AuthController {
     const { email } = await request.validateUsing(resendVerificationEmailValidator)
 
     try {
-      await AuthService.resendVerificationEmail(email)
+      await this.service.resendVerificationEmail(email)
 
       return response.ok({
         message: 'Verification email sent successfully.',

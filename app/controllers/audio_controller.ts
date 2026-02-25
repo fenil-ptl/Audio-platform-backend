@@ -2,6 +2,7 @@ import { AudioService } from '#services/audio_service'
 import { createAudioValidator } from '#validators/audio'
 import { genreValidator, updateGenreValidator } from '#validators/genre'
 import { moodValidator, updateMoodValidator } from '#validators/mood'
+import { paginatorValidator } from '#validators/pagination'
 import { inject } from '@adonisjs/core'
 import { cuid } from '@adonisjs/core/helpers'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -17,12 +18,6 @@ export default class AudioController {
     const audioFile = payload.fileUrl
     const imageFile = payload.imageUrl
 
-    if (!audioFile || !imageFile) {
-      return response.badRequest({
-        message: ' failed,   upload audio files is require',
-      })
-    }
-
     const audioFileName = `${cuid()}.${audioFile.extname}`
 
     await audioFile.move(app.tmpPath('audio'), {
@@ -35,31 +30,25 @@ export default class AudioController {
       name: imageFileName,
     })
 
-    const audio = this.service.create(user, {
+    await this.service.create(user, {
       title: payload.title,
       slug: payload.slug,
       bpm: payload.bpm,
       duration: payload.duration,
-      status: payload.status,
       rejectReason: payload.rejectReason,
-      fileUrl: `audio/${audioFileName}`, // Store relative path
+      fileUrl: `audio/${audioFileName}`,
       imageUrl: `images/${imageFileName}`, // Store relative path
     })
 
     return response.created({
       message: 'audio track create successfully',
-      data: audio,
     })
   }
 
-  async index({ auth }: HttpContext) {
+  async index({ auth, request }: HttpContext) {
     const userId = auth.user!.id
-
-    // user.role
-
-    // const audios = await AudioService.getAll(userId, 1, 5)
-
-    return this.service.getAll(userId, 1, 2)
+    const { page, limit } = await request.validateUsing(paginatorValidator)
+    return this.service.getAll(userId, page, limit)
   }
 
   async show({ params, response }: HttpContext) {
@@ -71,8 +60,9 @@ export default class AudioController {
     })
   }
 
-  async pendingTracks({ response }: HttpContext) {
-    const audios = await this.service.getPendingTracks(1, 5)
+  async pendingTracks({ request, response }: HttpContext) {
+    const { page, limit } = await request.validateUsing(paginatorValidator)
+    const audios = await this.service.getPendingTracks(page, limit)
 
     return response.ok({
       message: 'Pending tracks fetched successfully',
@@ -102,7 +92,7 @@ export default class AudioController {
     })
   }
 
-  async genres({ request, auth, response }: HttpContext) {
+  async createGenres({ request, auth, response }: HttpContext) {
     const user = auth.use('api').user!
     const payload = await request.validateUsing(genreValidator)
 
@@ -124,8 +114,7 @@ export default class AudioController {
     return response.ok({ editGenre, editBy: user })
   }
 
-  async deleteGenre({ auth, params }: HttpContext) {
-    const user = auth.use('api').user!
+  async deleteGenre({ params }: HttpContext) {
     return this.service.deleteGenre(params.id)
   }
 
@@ -138,7 +127,7 @@ export default class AudioController {
     return response.ok({ updateMood, editBy: user })
   }
 
-  async mood({ request, auth, response }: HttpContext) {
+  async createMood({ request, auth, response }: HttpContext) {
     const user = auth.use('api').user!
     const payload = await request.validateUsing(moodValidator)
 
@@ -153,10 +142,7 @@ export default class AudioController {
     })
   }
 
-  async deleteMood({ params, auth }: HttpContext) {
-    const user = auth.use('api').user!
-    // const mood = this.service.deleteMood(params.id)
-
+  async deleteMood({ params }: HttpContext) {
     return this.service.deleteMood(params.id)
   }
 }

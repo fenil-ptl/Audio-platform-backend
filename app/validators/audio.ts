@@ -11,7 +11,6 @@ export const createAudioValidator = vine.compile(
 
     bpm: vine.number(),
     duration: vine.number(),
-    status: vine.enum(['approve', 'pending', 'reject'] as const).optional(),
     rejectReason: vine.string().trim().optional(),
 
     fileUrl: vine.file({
