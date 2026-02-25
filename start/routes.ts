@@ -1,7 +1,7 @@
 import router from '@adonisjs/core/services/router'
 import { middleware } from './kernel.js'
 import {
-  // createTrackthrottle,
+  createTrackthrottle,
   exportthrottle,
   forgetPasswordthrottle,
   loginthrottle,
@@ -45,27 +45,34 @@ router
   .prefix('/auth')
 
 //seller routes
-const audioController = () => import('#controllers/audio_controller')
+const audioController = () => import('#controllers/seller_track_controller')
 router
   .group(() => {
-    router.post('/', [audioController, 'store']) //.middleware(createTrackthrottle)
+    router.post('/', [audioController, 'store']).middleware(createTrackthrottle)
     router.get('/', [audioController, 'index'])
     router.get('/:id', [audioController, 'show'])
+    // router.patch('/:id', [audioController, 'update'])
+    // router.delete('/:id', [audioController, 'delete'])
   })
   .prefix('/seller/tracks')
   .middleware([middleware.auth(), middleware.role(['seller']), middleware.verifyEmail()])
 
+const adminGenresController = () => import('#controllers/admin_genres_controller')
+const adminMoodsController = () => import('#controllers/admin_moods_controller')
+const adminTracksController = () => import('#controllers/admin_tracks_controller')
 router
   .group(() => {
-    router.get('/tracks/pending', [audioController, 'pendingTracks'])
-    router.patch('/tracks/:id/approve', [audioController, 'approveTrack'])
-    router.patch('/tracks/:id/rejected', [audioController, 'rejectTrack'])
-    router.post('/genres', [audioController, 'createGenres'])
-    router.patch('/genres/:id', [audioController, 'editGenres'])
-    router.delete('/genres/:id', [audioController, 'deleteGenre'])
-    router.post('/moods', [audioController, 'createMood'])
-    router.patch('/moods/:id', [audioController, 'editMood'])
-    router.delete('/moods/:id', [audioController, 'deleteMood'])
+    router.get('/tracks/pending', [adminTracksController, 'pendingTracks'])
+    router.patch('/tracks/:id/approve', [adminTracksController, 'approveTrack'])
+    router.patch('/tracks/:id/rejected', [adminTracksController, 'rejectTrack'])
+
+    router.post('/genres', [adminGenresController, 'createGenres'])
+    router.patch('/genres/:id', [adminGenresController, 'editGenres'])
+    router.delete('/genres/:id', [adminGenresController, 'deleteGenre'])
+
+    router.post('/moods', [adminMoodsController, 'createMood'])
+    router.patch('/moods/:id', [adminMoodsController, 'editMood'])
+    router.delete('/moods/:id', [adminMoodsController, 'deleteMood'])
   })
   .prefix('/admin')
   .middleware([middleware.auth(), middleware.verifyEmail(), middleware.role(['admin'])])
@@ -85,7 +92,7 @@ router
   })
   .prefix('/track')
 
-const audioTrackController = () => import('#controllers/audio_tracks_controller')
+const audioTrackController = () => import('#controllers/audio_tracks_export_controller')
 router
   .get('/admin/tracks/export', [audioTrackController, 'export'])
   .middleware([
