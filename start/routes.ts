@@ -52,7 +52,7 @@ router
     router.get('/', [audioController, 'index'])
     router.get('/:id', [audioController, 'show'])
     // router.patch('/:id', [audioController, 'update'])
-    // router.delete('/:id', [audioController, 'delete'])
+    router.delete('/:id', [audioController, 'destroy'])
   })
   .prefix('/seller/tracks')
   .middleware([middleware.auth(), middleware.role(['seller']), middleware.verifyEmail()])

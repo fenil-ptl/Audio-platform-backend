@@ -1,5 +1,6 @@
 import User from '#models/user'
 import Audio from '#models/audio'
+import { DateTime } from 'luxon'
 
 export interface CreateAudioPayload {
   title: string
@@ -46,12 +47,26 @@ export class AudioService {
     return data
   }
 
-  async getById(id: number): Promise<Audio> {
+  async getById(id: number, userId: number): Promise<Audio> {
     if (id < 1) {
       throw new Error('INVALID_AUDIO_ID')
     }
-    const audio = await Audio.findOrFail(id)
+    const audio = await Audio.query().where('id', id).where('seller_id', userId).firstOrFail()
 
     return audio
+  }
+  async softDelete(audioId: number, sellerId: number): Promise<void> {
+    const audio = await Audio.query()
+      .where('id', audioId)
+      .where('seller_id', sellerId)
+      .whereNull('deleted_at')
+      .first()
+
+    if (!audio) {
+      throw new Error('AUDIO_NOT_FOUND')
+    }
+
+    audio.deletedAt = DateTime.now()
+    await audio.save()
   }
 }

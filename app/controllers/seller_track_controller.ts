@@ -17,7 +17,6 @@ export default class AudioController {
     const imageFile = payload.imageUrl
 
     const audioFileName = `${cuid()}.${audioFile.extname}`
-
     await audioFile.move(app.tmpPath('audio'), {
       name: audioFileName,
     })
@@ -52,12 +51,33 @@ export default class AudioController {
     return this.service.getAll(userId, page, limit)
   }
 
-  async show({ params, response }: HttpContext) {
-    const audio = await this.service.getById(params.id)
+  async show({ params, auth, response }: HttpContext) {
+    const user = auth.use('api').user!
+    const audio = await this.service.getById(params.id, user.id)
 
     return response.ok({
       message: `single audio with id ${params.id} is fetched`,
       data: audio.serialize(),
     })
+  }
+
+  async destroy({ params, auth, response }: HttpContext) {
+    const user = auth.use('api').user!
+
+    try {
+      const audioId = Number(params.id)
+
+      await this.service.softDelete(audioId, user.id)
+
+      return response.ok({
+        success: true,
+        message: 'Audio track deleted successfully',
+      })
+    } catch (error) {
+      return response.internalServerError({
+        success: false,
+        message: 'Failed to delete audio track',
+      })
+    }
   }
 }
