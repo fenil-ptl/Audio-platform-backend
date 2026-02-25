@@ -3,6 +3,7 @@ import Audio from '#models/audio'
 import Genre from '#models/genre'
 import Mood from '#models/mood'
 import { inject } from '@adonisjs/core'
+import { DateTime } from 'luxon'
 
 export interface CreateAudioPayload {
   title: string
@@ -10,6 +11,8 @@ export interface CreateAudioPayload {
   bpm: number
   duration: number
   status?: 'approve' | 'pending' | 'reject'
+  genreId: number[]
+  moodId: number[]
   rejectReason?: string
   fileUrl: string
   imageUrl: string
@@ -130,7 +133,9 @@ export class AudioService {
   async deleteGenre(genreId: number) {
     const genre = await Genre.findOrFail(genreId)
 
-    await genre.delete()
+    genre.deletedAt = DateTime.now()
+
+    await genre.save()
 
     return {
       success: true,
@@ -155,7 +160,9 @@ export class AudioService {
   async deleteMood(id: number) {
     const mood = await Mood.findOrFail(id)
 
-    await mood.delete()
+    mood.deletedAt = DateTime.now()
+
+    await mood.save()
 
     return {
       success: true,

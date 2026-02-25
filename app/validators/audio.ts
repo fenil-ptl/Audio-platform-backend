@@ -11,6 +11,10 @@ export const createAudioValidator = vine.compile(
 
     bpm: vine.number(),
     duration: vine.number(),
+
+    genreId: vine.array(vine.number()).minLength(1),
+    moodId: vine.array(vine.number()).minLength(1),
+
     rejectReason: vine.string().trim().optional(),
 
     fileUrl: vine.file({

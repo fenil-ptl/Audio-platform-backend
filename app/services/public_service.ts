@@ -1,10 +1,24 @@
 import Audio from '#models/audio'
 export class PublicService {
-  async getAll(page: number, limit: number) {
-    return await Audio.query()
-      .where('status', 'approve')
-      .orderBy('created_at', 'desc')
-      .paginate(page, limit)
+  async getAll(page: number, limit: number, genres: string[], moods: string[]) {
+    let query = Audio.query()
+      .apply((scopes) => scopes.approved())
+      .preload('genres')
+      .preload('moods')
+
+    if (genres.length > 0) {
+      query.whereHas('genres', (q) => {
+        q.whereIn('slug', genres)
+      })
+    }
+
+    if (moods.length > 0) {
+      query.whereHas('moods', (q) => {
+        q.whereIn('slug', moods)
+      })
+    }
+
+    return query.orderBy('created_at', 'desc').paginate(page, limit)
   }
   async getById(id: number) {
     const track = await Audio.find(id)

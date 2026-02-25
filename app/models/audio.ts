@@ -1,7 +1,9 @@
 import { DateTime } from 'luxon'
-import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
+import { BaseModel, belongsTo, column, manyToMany, scope } from '@adonisjs/lucid/orm'
 import User from '#models/user'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import type { BelongsTo, ManyToMany } from '@adonisjs/lucid/types/relations'
+import Genre from './genre.js'
+import Mood from './mood.js'
 export default class Audio extends BaseModel {
   @column({ isPrimary: true })
   declare id: number
@@ -52,6 +54,20 @@ export default class Audio extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare reviewedAt: DateTime
 
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare deletedAt: DateTime
+  @column.dateTime()
+  declare deletedAt: DateTime | null
+
+  @manyToMany(() => Genre, {
+    pivotTable: 'audio_genres',
+  })
+  declare genres: ManyToMany<typeof Genre>
+
+  @manyToMany(() => Mood, {
+    pivotTable: 'audio_moods',
+  })
+  declare moods: ManyToMany<typeof Mood>
+
+  public static approved = scope((query) => {
+    query.where('status', 'approve').whereNull('deleted_at')
+  })
 }

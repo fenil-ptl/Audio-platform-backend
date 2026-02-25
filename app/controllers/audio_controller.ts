@@ -30,16 +30,19 @@ export default class AudioController {
       name: imageFileName,
     })
 
-    await this.service.create(user, {
+    const audio = await this.service.create(user, {
       title: payload.title,
       slug: payload.slug,
       bpm: payload.bpm,
       duration: payload.duration,
       rejectReason: payload.rejectReason,
       fileUrl: `audio/${audioFileName}`,
-      imageUrl: `images/${imageFileName}`, // Store relative path
+      imageUrl: `images/${imageFileName}`,
+      genreId: [],
+      moodId: [],
     })
-
+    await audio.related('genres').attach(payload.genreId)
+    await audio.related('moods').attach(payload.moodId)
     return response.created({
       message: 'audio track create successfully',
     })

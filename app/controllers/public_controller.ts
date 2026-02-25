@@ -1,5 +1,6 @@
 // import type { HttpContext } from '@adonisjs/core/http'
 import { PublicService } from '#services/public_service'
+import { paginatorValidator } from '#validators/pagination'
 import { inject } from '@adonisjs/core'
 import { HttpContext } from '@adonisjs/core/http'
 
@@ -8,10 +9,15 @@ export default class PublicController {
   constructor(private service: PublicService) {}
 
   async index({ request }: HttpContext) {
-    const page = request.input('page', 1)
-    const limit = request.input('limit', 5)
+    const { page, limit } = await request.validateUsing(paginatorValidator)
 
-    const tracks = await this.service.getAll(page, limit)
+    const genreSlugs = request.input('genres')
+    const moodSlugs = request.input('moods')
+
+    const genres = genreSlugs ? genreSlugs.split(',') : []
+    const moods = moodSlugs ? moodSlugs.split(',') : []
+
+    const tracks = await this.service.getAll(page, limit, genres, moods)
 
     return tracks
   }

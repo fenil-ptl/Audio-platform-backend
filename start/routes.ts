@@ -1,7 +1,7 @@
 import router from '@adonisjs/core/services/router'
 import { middleware } from './kernel.js'
 import {
-  createTrackthrottle,
+  // createTrackthrottle,
   exportthrottle,
   forgetPasswordthrottle,
   loginthrottle,
@@ -48,23 +48,22 @@ router
 const audioController = () => import('#controllers/audio_controller')
 router
   .group(() => {
-    router.post('/', [audioController, 'store']).middleware(createTrackthrottle)
+    router.post('/', [audioController, 'store']) //.middleware(createTrackthrottle)
     router.get('/', [audioController, 'index'])
     router.get('/:id', [audioController, 'show'])
   })
   .prefix('/seller/tracks')
   .middleware([middleware.auth(), middleware.role(['seller']), middleware.verifyEmail()])
 
-//admin routes
 router
   .group(() => {
     router.get('/tracks/pending', [audioController, 'pendingTracks'])
     router.patch('/tracks/:id/approve', [audioController, 'approveTrack'])
     router.patch('/tracks/:id/rejected', [audioController, 'rejectTrack'])
     router.post('/genres', [audioController, 'createGenres'])
-    router.post('/moods', [audioController, 'createMood'])
     router.patch('/genres/:id', [audioController, 'editGenres'])
     router.delete('/genres/:id', [audioController, 'deleteGenre'])
+    router.post('/moods', [audioController, 'createMood'])
     router.patch('/moods/:id', [audioController, 'editMood'])
     router.delete('/moods/:id', [audioController, 'deleteMood'])
   })
