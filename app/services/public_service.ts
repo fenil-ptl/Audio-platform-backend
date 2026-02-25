@@ -8,17 +8,17 @@ export class PublicService {
 
     if (genres.length > 0) {
       query.whereHas('genres', (q) => {
-        q.whereIn('slug', genres)
+        q.whereIn('name', genres)
       })
     }
 
     if (moods.length > 0) {
       query.whereHas('moods', (q) => {
-        q.whereIn('slug', moods)
+        q.whereIn('name', moods)
       })
     }
 
-    return query.orderBy('created_at', 'desc').paginate(page, limit)
+    return query.paginate(page, limit)
   }
   async getById(id: number) {
     const track = await Audio.find(id)
