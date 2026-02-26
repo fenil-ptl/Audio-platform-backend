@@ -14,7 +14,7 @@ const dbConfig = defineConfig({
         database: env.get('DB_DATABASE'),
       },
       migrations: {
-        naturalSort: true,
+        naturalSort: false,
         paths: ['database/migrations'],
       },
     },

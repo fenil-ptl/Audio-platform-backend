@@ -2,7 +2,7 @@ import vine from '@vinejs/vine'
 
 export const genreValidator = vine.compile(
   vine.object({
-    name: vine.enum(['pop', 'rock', 'folk', 'electronic', 'jazz'] as const),
+    name: vine.enum(['pop', 'rock', 'folk', 'electronic', 'jazz', 'lofi', 'ambient'] as const),
     slug: vine.string().minLength(5),
   })
 )

@@ -58,6 +58,7 @@
     "@adonisjs/limiter": "^2.4.0",
     "@adonisjs/lucid": "^21.6.1",
     "@adonisjs/mail": "^9.2.2",
+    "@faker-js/faker": "^10.3.0",
     "@maximemrf/adonisjs-jwt": "^0.7.0",
     "@vinejs/vine": "^3.0.1",
     "csv-stringify": "^6.6.0",
