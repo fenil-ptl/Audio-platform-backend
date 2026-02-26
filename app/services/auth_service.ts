@@ -3,6 +3,7 @@ import mail from '@adonisjs/mail/services/main'
 import User from '#models/user'
 import { HttpContext } from '@adonisjs/core/http'
 import router from '@adonisjs/core/services/router'
+import env from '#start/env'
 
 export default class AuthService {
   async register(data: {
@@ -34,12 +35,13 @@ export default class AuthService {
         expiresIn: '24h',
       }
     )
-
+    const appUrl = env.get('APP_URL') // Now TypeScript knows it's a string
+    const baseUrl = appUrl.replace(/\/$/, '')
     await mail.send((message) => {
       message.to(user.email).subject('Verify your account').html(`
           <h2>Welcome ${user.fullName}</h2>
           <p>Click below to verify your account:</p>
-          <a href="http://localhost:3333${signedUrl}">
+          <a href="${baseUrl}${signedUrl}">
             Verify Email
           </a>
         `)
@@ -101,12 +103,13 @@ export default class AuthService {
         expiresIn: '15m',
       }
     )
-
+    const appUrl = env.get('APP_URL') // Now TypeScript knows it's a string
+    const baseUrl = appUrl.replace(/\/$/, '')
     await mail.send((message) => {
       message.to(user.email).subject('Reset your password').html(`
             <h2>Password Reset</h2>
             <p>You requested a password reset. Click the link below:</p>
-            <a href="http://localhost:3333${signedUrl}">
+            <a href="${baseUrl}${signedUrl}">
               Reset Password
             </a>
           `)

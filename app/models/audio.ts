@@ -19,13 +19,13 @@ export default class Audio extends BaseModel {
   @column()
   declare title: string
 
-  @column({ columnName: 'cover-image-url' })
+  @column({ columnName: 'cover_image_url' })
   declare imageUrl: string
 
   @column()
   declare slug: string
 
-  @column({ columnName: 'file-url' })
+  @column({ columnName: 'file_url' })
   declare fileUrl: string
 
   @column()

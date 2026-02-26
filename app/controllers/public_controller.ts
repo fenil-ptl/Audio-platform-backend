@@ -11,24 +11,30 @@ export default class PublicController {
   async index({ request }: HttpContext) {
     const { page, limit } = await request.validateUsing(paginatorValidator)
 
-    const genreInput = request.input('genres')
-    const moodInput = request.input('moods')
+    const genreInput = request.input('genreIds')
+    const moodInput = request.input('moodIds')
 
-    const genres =
+    const genreIds =
       typeof genreInput === 'string'
-        ? genreInput.split(',')
+        ? genreInput
+            .split(',')
+            .map((id) => Number(id.trim()))
+            .filter(Boolean)
         : Array.isArray(genreInput)
-          ? genreInput
+          ? genreInput.map((id) => Number(id)).filter(Boolean)
           : []
 
-    const moods =
+    const moodIds =
       typeof moodInput === 'string'
-        ? moodInput.split(',')
+        ? moodInput
+            .split(',')
+            .map((id) => Number(id.trim()))
+            .filter(Boolean)
         : Array.isArray(moodInput)
-          ? moodInput
+          ? moodInput.map((id) => Number(id)).filter(Boolean)
           : []
 
-    const tracks = await this.service.getAll(page, limit, genres, moods)
+    const tracks = await this.service.getAll(page, limit, genreIds, moodIds)
 
     return tracks
   }
