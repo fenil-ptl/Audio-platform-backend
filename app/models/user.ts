@@ -36,5 +36,4 @@ export default class User extends compose(BaseModel, AuthFinder) {
     declare isEmailVerified: boolean
 
     static accessTokens = DbAccessTokensProvider.forModel(User)
-    isActive: any
 }

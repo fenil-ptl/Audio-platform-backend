@@ -4,27 +4,33 @@ import type { HttpContext } from '@adonisjs/core/http'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 
+const createGenreValidator = vine.compile(
+    vine.object({
+        name: vine.enum([
+            'pop',
+            'rock',
+            'folk',
+            'electronic',
+            'jazz',
+            'lofi',
+            'ambient',
+            'house',
+            'hip-hop',
+            'classical',
+        ] as const),
+        slug: vine.string().minLength(5),
+    })
+)
+
+const editGenreValidator = vine.compile(
+    vine.object({
+        name: vine.string().trim().optional(),
+        slug: vine.string().optional(),
+    })
+)
 export default class AdminGenresController {
     async createGenres({ request, i18n }: HttpContext) {
-        const payload = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    name: vine.enum([
-                        'pop',
-                        'rock',
-                        'folk',
-                        'electronic',
-                        'jazz',
-                        'lofi',
-                        'ambient',
-                        'house',
-                        'hip-hop',
-                        'classical',
-                    ] as const),
-                    slug: vine.string().minLength(5),
-                })
-            )
-        )
+        const payload = await request.validateUsing(createGenreValidator)
 
         const existingSlug = await Genre.query().where('slug', payload.slug).select('id').first()
 
@@ -45,14 +51,7 @@ export default class AdminGenresController {
     async editGenres({ request, params, i18n }: HttpContext) {
         const id = Number(params.id)
 
-        const payload = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    name: vine.string().trim().optional(),
-                    slug: vine.string().optional(),
-                })
-            )
-        )
+        const payload = await request.validateUsing(editGenreValidator)
 
         const genre = await Genre.query()
             .where('id', id)

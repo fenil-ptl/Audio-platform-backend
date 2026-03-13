@@ -180,7 +180,10 @@ export default class AuthController {
             .select('id', 'isEmailVerified')
             .first()
 
-        if (!user || user.isEmailVerified) {
+        if (!user) {
+            return { message: i18n.t('message.auth.resend_success') }
+        }
+        if (user.isEmailVerified) {
             return { message: i18n.t('message.auth.email_already_verified') }
         }
 

@@ -4,16 +4,23 @@ import type { HttpContext } from '@adonisjs/core/http'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 
+const createMoodValidator = vine.compile(
+    vine.object({
+        name: vine.string().trim().minLength(2).maxLength(100),
+        slug: vine.string().trim().minLength(2).maxLength(100),
+    })
+)
+
+const editMoodValidator = vine.compile(
+    vine.object({
+        name: vine.string().trim().optional(),
+        slug: vine.string().trim().optional(),
+    })
+)
+
 export default class AdminMoodsController {
     async createMood({ request, i18n }: HttpContext) {
-        const payload = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    name: vine.string().trim().minLength(2).maxLength(100),
-                    slug: vine.string().trim().minLength(2).maxLength(100),
-                })
-            )
-        )
+        const payload = await request.validateUsing(createMoodValidator)
 
         const existingSlug = await Mood.query().where('slug', payload.slug).select('id').first()
 
@@ -34,14 +41,7 @@ export default class AdminMoodsController {
     async editMood({ request, params, i18n }: HttpContext) {
         const id = Number(params.id)
 
-        const payload = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    name: vine.string().trim().optional(),
-                    slug: vine.string().trim().optional(),
-                })
-            )
-        )
+        const payload = await request.validateUsing(editMoodValidator)
 
         const mood = await Mood.query()
             .where('id', id)

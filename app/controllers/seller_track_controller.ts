@@ -53,37 +53,49 @@ export default class AudioController {
             throw new Exception(i18n.t('message.track.slug_taken'), { status: 409 })
         }
 
-        const [uploadedAudio, uploadedImage] = await Promise.all([
-            this.fileService.uploadAudio(payload.fileUrl, user.id),
-            this.fileService.uploadImage(payload.imageUrl, user.id),
-        ])
+        let uploadedAudio: Awaited<ReturnType<FileService['uploadAudio']>> | null = null
+        let uploadedImage: Awaited<ReturnType<FileService['uploadImage']>> | null = null
 
-        const audio = await db.transaction(async (trx) => {
-            const newAudio = await Audio.create(
-                {
-                    title: payload.title,
-                    slug: payload.slug,
-                    bpm: payload.bpm,
-                    duration: payload.duration,
-                    fileUrl: uploadedAudio.path,
-                    imageUrl: uploadedImage.path,
-                    sellerId: user.id,
-                    status: 'pending',
-                },
-                { client: trx }
-            )
-
-            await Promise.all([
-                newAudio.related('genres').attach(payload.genreId, trx),
-                newAudio.related('moods').attach(payload.moodId, trx),
+        try {
+            ;[uploadedAudio, uploadedImage] = await Promise.all([
+                this.fileService.uploadAudio(payload.fileUrl, user.id),
+                this.fileService.uploadImage(payload.imageUrl, user.id),
             ])
 
-            return newAudio
-        })
+            const audio = await db.transaction(async (trx) => {
+                const newAudio = await Audio.create(
+                    {
+                        title: payload.title,
+                        slug: payload.slug,
+                        bpm: payload.bpm,
+                        duration: payload.duration,
+                        fileUrl: uploadedAudio!.path,
+                        imageUrl: uploadedImage!.path,
+                        sellerId: user.id,
+                        status: 'pending',
+                    },
+                    { client: trx }
+                )
 
-        return {
-            message: i18n.t('message.track.created'),
-            data: audio.serialize(),
+                await Promise.all([
+                    newAudio.related('genres').attach(payload.genreId, trx),
+                    newAudio.related('moods').attach(payload.moodId, trx),
+                ])
+
+                return newAudio
+            })
+
+            return {
+                message: i18n.t('message.track.created'),
+                data: audio.serialize(),
+            }
+        } catch (error) {
+            // Clean up uploaded files if DB transaction failed
+            await Promise.allSettled([
+                uploadedAudio ? this.fileService.delete(uploadedAudio.path) : Promise.resolve(),
+                uploadedImage ? this.fileService.delete(uploadedImage.path) : Promise.resolve(),
+            ])
+            throw error
         }
     }
 
@@ -128,11 +140,20 @@ export default class AudioController {
             .where('id', audioId)
             .where('seller_id', user.id)
             .whereNull('deleted_at')
-            .select('id', 'title', 'slug', 'bpm', 'duration', 'status')
+            .select(
+                'id',
+                'title',
+                'slug',
+                'bpm',
+                'duration',
+                'status',
+                'file_url',
+                'cover_image_url'
+            )
             .first()
 
         if (!audio) {
-            throw new Exception(i18n.t('messages.track.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.track.not_found'), { status: 404 })
         }
 
         const payload = await request.validateUsing(updateValidator)
@@ -149,50 +170,66 @@ export default class AudioController {
                 .first()
 
             if (slugTaken) {
-                throw new Exception(i18n.t('messages.track.slug_taken'), { status: 409 })
+                throw new Exception(i18n.t('message.track.slug_taken'), { status: 409 })
             }
         }
 
         let newAudioPath: string | undefined
         let newImagePath: string | undefined
+        // Save old paths — only delete AFTER transaction succeeds
+        let oldAudioPath: string | undefined
+        let oldImagePath: string | undefined
 
-        if (payload.fileUrl) {
-            const uploaded = await this.fileService.uploadAudio(payload.fileUrl, user.id)
-            // delete old file from tmp (best effort)
-            await this.fileService.delete(audio.fileUrl)
-            newAudioPath = uploaded.path
-        }
+        try {
+            if (payload.fileUrl) {
+                const uploaded = await this.fileService.uploadAudio(payload.fileUrl, user.id)
+                oldAudioPath = audio.fileUrl // remember old, don't delete yet
+                newAudioPath = uploaded.path
+            }
 
-        if (payload.imageUrl) {
-            const uploaded = await this.fileService.uploadImage(payload.imageUrl, user.id)
-            // delete old image from tmp (best effort)
-            await this.fileService.delete(audio.imageUrl)
-            newImagePath = uploaded.path
-        }
+            if (payload.imageUrl) {
+                const uploaded = await this.fileService.uploadImage(payload.imageUrl, user.id)
+                oldImagePath = audio.imageUrl // remember old, don't delete yet
+                newImagePath = uploaded.path
+            }
 
-        await db.transaction(async (trx) => {
-            audio.useTransaction(trx)
+            await db.transaction(async (trx) => {
+                audio.useTransaction(trx)
 
-            audio.merge({
-                ...(payload.title && { title: payload.title }),
-                ...(payload.slug && { slug: payload.slug }),
-                ...(payload.bpm && { bpm: payload.bpm }),
-                ...(payload.duration && { duration: payload.duration }),
-                ...(newAudioPath && { fileUrl: newAudioPath }),
-                ...(newImagePath && { imageUrl: newImagePath }),
-                status: 'pending',
+                audio.merge({
+                    ...(payload.title && { title: payload.title }),
+                    ...(payload.slug && { slug: payload.slug }),
+                    ...(payload.bpm && { bpm: payload.bpm }),
+                    ...(payload.duration && { duration: payload.duration }),
+                    ...(newAudioPath && { fileUrl: newAudioPath }),
+                    ...(newImagePath && { imageUrl: newImagePath }),
+                    status: 'pending',
+                })
+
+                await audio.save()
+
+                if (payload.genreId) {
+                    await audio.related('genres').sync(payload.genreId, true, trx)
+                }
+
+                if (payload.moodId) {
+                    await audio.related('moods').sync(payload.moodId, true, trx)
+                }
             })
 
-            await audio.save()
-
-            if (payload.genreId) {
-                await audio.related('genres').sync(payload.genreId, true, trx)
-            }
-
-            if (payload.moodId) {
-                await audio.related('moods').sync(payload.moodId, true, trx)
-            }
-        })
+            // Transaction committed — now safe to delete old files
+            await Promise.allSettled([
+                oldAudioPath ? this.fileService.delete(oldAudioPath) : Promise.resolve(),
+                oldImagePath ? this.fileService.delete(oldImagePath) : Promise.resolve(),
+            ])
+        } catch (error) {
+            // Transaction failed — delete the newly uploaded files (old files untouched)
+            await Promise.allSettled([
+                newAudioPath ? this.fileService.delete(newAudioPath) : Promise.resolve(),
+                newImagePath ? this.fileService.delete(newImagePath) : Promise.resolve(),
+            ])
+            throw error
+        }
 
         const updated = await Audio.query()
             .where('id', audioId)

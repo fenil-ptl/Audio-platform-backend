@@ -16,7 +16,7 @@ router.group(() => {
     router.post('/auth/login', [AuthController, 'login']).middleware(loginthrottle)
     router.post('/auth/logout', [AuthController, 'logout']).middleware(middleware.auth())
     router
-        .post('/auth/profile', [AuthController, 'me'])
+        .get('/auth/profile', [AuthController, 'me'])
         .middleware([middleware.auth(), middleware.verifyEmail()])
     router
         .post('/auth/forgot-password', [AuthController, 'forgotPassword'])
