@@ -3,6 +3,13 @@ import { HttpContext } from '@adonisjs/core/http'
 import vine from '@vinejs/vine'
 import Audio from '#models/audio'
 
+const publicIndexValidator = vine.compile(
+    vine.object({
+        page: vine.number().positive().min(1).max(1000),
+        limit: vine.number().positive().min(1).max(100),
+    })
+)
+
 export default class PublicController {
     private parseIds(input: unknown): number[] {
         if (typeof input === 'string') {
@@ -18,14 +25,7 @@ export default class PublicController {
     }
 
     async index({ request, i18n }: HttpContext) {
-        const { page, limit } = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    page: vine.number().positive().min(1).max(1000),
-                    limit: vine.number().positive().min(1).max(100),
-                })
-            )
-        )
+        const { page, limit } = await request.validateUsing(publicIndexValidator)
 
         const genreIds = this.parseIds(request.input('genreIds'))
         const moodIds = this.parseIds(request.input('moodIds'))
@@ -33,7 +33,6 @@ export default class PublicController {
         if (genreIds.length > 20) {
             throw new Exception(i18n.t('messages.track.genre_limit'), { status: 422 })
         }
-
         if (moodIds.length > 20) {
             throw new Exception(i18n.t('messages.track.mood_limit'), { status: 422 })
         }
@@ -42,12 +41,13 @@ export default class PublicController {
             .where('status', 'approve')
             .whereNull('deleted_at')
             .select('id', 'title', 'slug', 'bpm', 'duration', 'file_url', 'image_url', 'created_at')
+            .preload('genres', (q) => q.select('id', 'name', 'slug'))
+            .preload('moods', (q) => q.select('id', 'name', 'slug'))
             .orderBy('created_at', 'desc')
 
         if (genreIds.length) {
             query.whereHas('genres', (q) => q.whereIn('genre_id', genreIds))
         }
-
         if (moodIds.length) {
             query.whereHas('moods', (q) => q.whereIn('mood_id', moodIds))
         }

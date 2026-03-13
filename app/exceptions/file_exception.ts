@@ -26,3 +26,12 @@ export class FileUploadException extends Exception {
         super(message)
     }
 }
+
+export class FileMoveException extends Exception {
+    static status = 500
+    static code = 'E_FILE_MOVE_FAILED'
+
+    constructor(message: string = 'File move failed') {
+        super(message)
+    }
+}

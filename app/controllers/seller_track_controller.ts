@@ -7,30 +7,35 @@ import { DateTime } from 'luxon'
 import db from '@adonisjs/lucid/services/db'
 import Audio from '#models/audio'
 
+const storeValidator = vine.compile(
+    vine.object({
+        title: vine.string().trim().minLength(3),
+        slug: vine.string().trim().minLength(5).alphaNumeric({ allowDashes: true }),
+        bpm: vine.number().positive(),
+        duration: vine.number().positive(),
+        genreId: vine.array(vine.number().positive()).minLength(1),
+        moodId: vine.array(vine.number().positive()).minLength(1),
+        fileUrl: vine.file({ size: '5mb', extnames: ['mp3', 'm4a'] }),
+        imageUrl: vine.file({ size: '5mb', extnames: ['jpg', 'jpeg', 'png'] }),
+    })
+)
+
+const paginationValidator = vine.compile(
+    vine.object({
+        page: vine.number().positive().min(1).max(1000),
+        limit: vine.number().positive().min(1).max(100),
+    })
+)
+
 @inject()
 export default class AudioController {
     constructor(private fileService: FileService) {}
 
     async store({ request, auth, i18n }: HttpContext) {
         const user = auth.user!
-
-        const payload = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    title: vine.string().trim().minLength(3),
-                    slug: vine.string().trim().minLength(5).alphaNumeric({ allowDashes: true }),
-                    bpm: vine.number().positive(),
-                    duration: vine.number().positive(),
-                    genreId: vine.array(vine.number().positive()).minLength(1),
-                    moodId: vine.array(vine.number().positive()).minLength(1),
-                    fileUrl: vine.file({ size: '5mb', extnames: ['mp3', 'm4a'] }),
-                    imageUrl: vine.file({ size: '5mb', extnames: ['jpg', 'jpeg', 'png'] }),
-                })
-            )
-        )
+        const payload = await request.validateUsing(storeValidator)
 
         const existingSlug = await Audio.query().where('slug', payload.slug).select('id').first()
-
         if (existingSlug) {
             throw new Exception(i18n.t('messages.track.slug_taken'), { status: 409 })
         }
@@ -70,14 +75,7 @@ export default class AudioController {
     }
 
     async index({ auth, request }: HttpContext) {
-        const { page, limit } = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    page: vine.number().positive().min(1).max(1000),
-                    limit: vine.number().positive().min(1).max(100),
-                })
-            )
-        )
+        const { page, limit } = await request.validateUsing(paginationValidator)
 
         const audios = await Audio.query()
             .where('seller_id', auth.user!.id)
@@ -97,14 +95,19 @@ export default class AudioController {
             .select(
                 'id',
                 'title',
+                'slug',
                 'bpm',
                 'duration',
                 'status',
+                'reject_reason',
                 'file_url',
                 'image_url',
                 'created_at',
                 'updated_at'
             )
+
+            .preload('genres', (q) => q.select('id', 'name', 'slug'))
+            .preload('moods', (q) => q.select('id', 'name', 'slug'))
             .first()
 
         if (!audio) {

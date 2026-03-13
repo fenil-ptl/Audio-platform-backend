@@ -3,6 +3,7 @@ import mail from '@adonisjs/mail/services/main'
 import router from '@adonisjs/core/services/router'
 import env from '#start/env'
 import User from '#models/user'
+import Logger from '@adonisjs/core/services/logger'
 
 type AuthMailJobData =
     | { type: 'VERIFY_EMAIL'; userId: number }
@@ -28,11 +29,11 @@ export default class AuthMailJob extends Job {
 
             await mail.send((message) => {
                 message.to(user.email).subject('Verify your account').html(`
-                        <h2>Welcome ${user.fullName}</h2>
-                        <p>Click below to verify your account:</p>
-                        <a href="${baseUrl}${signedUrl}">Verify Email</a>
-                        <p>This link expires in 24 hours.</p>
-                    `)
+                    <h2>Welcome ${user.fullName}</h2>
+                    <p>Click below to verify your account:</p>
+                    <a href="${baseUrl}${signedUrl}">Verify Email</a>
+                    <p>This link expires in 24 hours.</p>
+                `)
             })
             return
         }
@@ -46,21 +47,25 @@ export default class AuthMailJob extends Job {
 
             await mail.send((message) => {
                 message.to(user.email).subject('Reset your password').html(`
-                        <h2>Password Reset</h2>
-                        <p>You requested a password reset. Click below:</p>
-                        <a href="${baseUrl}${signedUrl}">Reset Password</a>
-                        <p>This link expires in 15 minutes.</p>
-                    `)
+                    <h2>Password Reset</h2>
+                    <p>You requested a password reset. Click below:</p>
+                    <a href="${baseUrl}${signedUrl}">Reset Password</a>
+                    <p>This link expires in 15 minutes.</p>
+                `)
             })
             return
         }
     }
 
-    // Required — called when job exhausts all retry attempts
+    // FIX: was console.error() — now uses structured Logger visible in all log aggregators
     async rescue(data: AuthMailJobData, error: Error) {
-        console.error(
-            `AuthMailJob failed for type ${data.type}, userId ${data.userId}:`,
-            error.message
+        Logger.error(
+            {
+                jobType: data.type,
+                userId: data.userId,
+                error: error.message,
+            },
+            'AuthMailJob exhausted all retry attempts — email not delivered'
         )
     }
 }

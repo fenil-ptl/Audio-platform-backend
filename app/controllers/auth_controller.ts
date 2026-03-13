@@ -6,25 +6,60 @@ import queue from '@rlanz/bull-queue/services/main'
 import User from '#models/user'
 import AuthMailJob from '#jobs/auth_mail_job'
 
+// ─── VALIDATORS — compiled ONCE at module level (also fixes Bug #3) ──────────
+const registerValidator = vine.compile(
+    vine.object({
+        fullName: vine.string().trim().minLength(3).maxLength(100),
+        email: vine.string().email().normalizeEmail(),
+        password: vine
+            .string()
+            .minLength(8)
+            .maxLength(64)
+            .regex(/[A-Z]/)
+            .regex(/[a-z]/)
+            .regex(/[0-9]/)
+            .regex(/[@$!%*?&]/),
+        // FIX: 'admin' removed — users can NEVER self-assign admin
+        role: vine.enum(['seller', 'user'] as const),
+    })
+)
+
+const loginValidator = vine.compile(
+    vine.object({
+        email: vine.string().email().normalizeEmail(),
+        password: vine.string().minLength(8).maxLength(64),
+    })
+)
+
+const forgotPasswordValidator = vine.compile(
+    vine.object({
+        email: vine.string().email().normalizeEmail(),
+    })
+)
+
+const resetPasswordValidator = vine.compile(
+    vine.object({
+        password: vine
+            .string()
+            .minLength(8)
+            .maxLength(64)
+            .regex(/[A-Z]/)
+            .regex(/[a-z]/)
+            .regex(/[0-9]/)
+            .regex(/[@$!%*?&]/),
+    })
+)
+
+const resendValidator = vine.compile(
+    vine.object({
+        email: vine.string().email().normalizeEmail(),
+    })
+)
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default class AuthController {
     async register({ request, i18n }: HttpContext) {
-        const payload = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    fullName: vine.string().trim().minLength(3).maxLength(100),
-                    email: vine.string().email().normalizeEmail(),
-                    password: vine
-                        .string()
-                        .minLength(8)
-                        .maxLength(64)
-                        .regex(/[A-Z]/)
-                        .regex(/[a-z]/)
-                        .regex(/[0-9]/)
-                        .regex(/[@$!%*?&]/),
-                    role: vine.enum(['seller', 'admin', 'user'] as const),
-                })
-            )
-        )
+        const payload = await request.validateUsing(registerValidator)
 
         const existing = await User.query().where('email', payload.email).select('id').first()
 
@@ -34,7 +69,7 @@ export default class AuthController {
 
         const user = await User.create({ ...payload, isEmailVerified: false })
 
-        await queue.dispatch(AuthMailJob, { type: 'VERIFY_EMAIL', userId: user.id })
+        queue.dispatch(AuthMailJob, { type: 'VERIFY_EMAIL', userId: user.id })
 
         return {
             message: i18n.t('messages.auth.register_success'),
@@ -58,20 +93,11 @@ export default class AuthController {
         user.isEmailVerified = true
         await user.save()
 
-        return {
-            message: i18n.t('messages.auth.email_verified'),
-        }
+        return { message: i18n.t('messages.auth.email_verified') }
     }
 
     async login({ request, i18n }: HttpContext) {
-        const { email, password } = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    email: vine.string().email().normalizeEmail(),
-                    password: vine.string().minLength(8).maxLength(64),
-                })
-            )
-        )
+        const { email, password } = await request.validateUsing(loginValidator)
 
         const user = await User.query()
             .where('email', email)
@@ -94,10 +120,7 @@ export default class AuthController {
         return {
             message: i18n.t('messages.auth.login_success'),
             user: user.serialize(),
-            token: {
-                type: 'bearer',
-                value: token.value!.release(),
-            },
+            token: { type: 'bearer', value: token.value!.release() },
         }
     }
 
@@ -111,9 +134,7 @@ export default class AuthController {
 
         await User.accessTokens.delete(user, token.identifier)
 
-        return {
-            message: i18n.t('messages.auth.logout_success'),
-        }
+        return { message: i18n.t('messages.auth.logout_success') }
     }
 
     async me({ auth }: HttpContext) {
@@ -121,23 +142,15 @@ export default class AuthController {
     }
 
     async forgotPassword({ request, i18n }: HttpContext) {
-        const { email } = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    email: vine.string().email().normalizeEmail(),
-                })
-            )
-        )
+        const { email } = await request.validateUsing(forgotPasswordValidator)
 
         const user = await User.query().where('email', email).select('id').first()
 
         if (user) {
-            await queue.dispatch(AuthMailJob, { type: 'RESET_PASSWORD', userId: user.id })
+            queue.dispatch(AuthMailJob, { type: 'RESET_PASSWORD', userId: user.id })
         }
 
-        return {
-            message: i18n.t('messages.auth.forgot_password_sent'),
-        }
+        return { message: i18n.t('messages.auth.forgot_password_sent') }
     }
 
     async resetPassword({ request, i18n }: HttpContext) {
@@ -145,20 +158,7 @@ export default class AuthController {
             throw new Exception(i18n.t('messages.auth.reset_link_expired'), { status: 400 })
         }
 
-        const { password } = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    password: vine
-                        .string()
-                        .minLength(8)
-                        .maxLength(64)
-                        .regex(/[A-Z]/)
-                        .regex(/[a-z]/)
-                        .regex(/[0-9]/)
-                        .regex(/[@$!%*?&]/),
-                })
-            )
-        )
+        const { password } = await request.validateUsing(resetPasswordValidator)
 
         const user = await User.query()
             .where('id', request.param('id'))
@@ -171,19 +171,11 @@ export default class AuthController {
         const tokens = await User.accessTokens.all(user)
         await Promise.all(tokens.map((t) => User.accessTokens.delete(user, t.identifier)))
 
-        return {
-            message: i18n.t('messages.auth.reset_success'),
-        }
+        return { message: i18n.t('messages.auth.reset_success') }
     }
 
     async resendVerificationEmail({ request, i18n }: HttpContext) {
-        const { email } = await request.validateUsing(
-            vine.compile(
-                vine.object({
-                    email: vine.string().email().normalizeEmail(),
-                })
-            )
-        )
+        const { email } = await request.validateUsing(resendValidator)
 
         const user = await User.query()
             .where('email', email)
@@ -191,15 +183,11 @@ export default class AuthController {
             .first()
 
         if (!user || user.isEmailVerified) {
-            return {
-                message: i18n.t('messages.auth.forgot_password_sent'),
-            }
+            return { message: i18n.t('messages.auth.forgot_password_sent') }
         }
 
-        await queue.dispatch(AuthMailJob, { type: 'VERIFY_EMAIL', userId: user.id })
+        queue.dispatch(AuthMailJob, { type: 'VERIFY_EMAIL', userId: user.id })
 
-        return {
-            message: i18n.t('messages.auth.resend_success'),
-        }
+        return { message: i18n.t('messages.auth.resend_success') }
     }
 }

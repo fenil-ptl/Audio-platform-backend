@@ -3,6 +3,7 @@ import { middleware } from './kernel.js'
 import {
     createTrackthrottle,
     forgetPasswordthrottle,
+    registerthrottle,
     loginthrottle,
     publicthrottle,
 } from './limiter.js'
@@ -10,7 +11,7 @@ import {
 const AuthController = () => import('#controllers/auth_controller')
 
 router.group(() => {
-    router.post('/auth/register', [AuthController, 'register'])
+    router.post('/auth/register', [AuthController, 'register']).middleware(registerthrottle)
     router.get('/auth/verify-email/:id', [AuthController, 'verifyEmail']).as('auth.verifyEmail')
     router.post('/auth/login', [AuthController, 'login']).middleware(loginthrottle)
     router.post('/auth/logout', [AuthController, 'logout']).middleware(middleware.auth())

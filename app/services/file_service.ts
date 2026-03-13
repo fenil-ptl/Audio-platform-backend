@@ -1,11 +1,11 @@
-// app/services/file_service.ts
 import { randomUUID } from 'node:crypto'
 import { MultipartFile } from '@adonisjs/core/types/bodyparser'
-import { Exception } from '@adonisjs/core/exceptions'
+import drive from '@adonisjs/drive/services/main'
 import app from '@adonisjs/core/services/app'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import Logger from '@adonisjs/core/services/logger'
+import { FileUploadException, FileMoveException } from '#exceptions/file_exception'
 
 export interface UploadedFileInfo {
     path: string
@@ -29,29 +29,37 @@ export default class FileService {
 
     async delete(filePath: string): Promise<void> {
         try {
-            const absolutePath = app.tmpPath(filePath)
-            await fs.unlink(absolutePath)
-            Logger.info('File deleted', { filePath })
+            // FIX: deletes from drive, not from tmp
+            await drive.use().delete(filePath)
+            Logger.info('File deleted from drive', { filePath })
         } catch (error) {
-            Logger.warn('Failed to delete file', { filePath, error: error.message })
+            Logger.warn('Failed to delete file from drive', { filePath, error: error.message })
         }
     }
 
+    // FIX: writes to @adonisjs/drive (persistent S3 / GCS / local disk)
+    //      instead of app.tmpPath() which is wiped on restart
     private async moveToStorage(file: MultipartFile, filePath: string): Promise<UploadedFileInfo> {
-        try {
-            const absoluteDir = app.tmpPath(path.dirname(filePath))
-            await fs.mkdir(absoluteDir, { recursive: true })
+        const tmpName = `${randomUUID()}_${path.basename(filePath)}`
+        const tmpDir = app.tmpPath()
 
-            await file.move(absoluteDir, { name: path.basename(filePath), overwrite: false })
+        try {
+            // Step 1 — land the multipart upload in tmp first (required by AdonisJS bodyparser)
+            await file.move(tmpDir, { name: tmpName, overwrite: false })
 
             if (!file.isValid) {
-                throw new Exception(file.errors[0]?.message ?? 'File move failed', {
-                    status: 500,
-                    code: 'E_FILE_MOVE_FAILED',
-                })
+                throw new FileMoveException(file.errors[0]?.message ?? 'File move failed')
             }
 
-            Logger.info('File stored', { filePath, size: file.size })
+            // Step 2 — read from tmp and stream into persistent drive storage
+            const tmpFullPath = path.join(tmpDir, tmpName)
+            const buffer = await fs.readFile(tmpFullPath)
+            await drive.use().put(filePath, buffer)
+
+            // Step 3 — clean up tmp now that drive has the file
+            await fs.unlink(tmpFullPath).catch(() => {})
+
+            Logger.info('File stored on drive', { filePath, size: file.size })
 
             return {
                 path: filePath,
@@ -60,10 +68,10 @@ export default class FileService {
                 mimeType: `${file.type}/${file.subtype}`,
             }
         } catch (error) {
-            Logger.error('Failed to store file', { filePath, error: error.message })
-            throw error instanceof Exception
+            Logger.error('Failed to store file on drive', { filePath, error: error.message })
+            throw error instanceof FileUploadException || error instanceof FileMoveException
                 ? error
-                : new Exception('File upload failed', { status: 500, code: 'E_FILE_UPLOAD_FAILED' })
+                : new FileUploadException('File upload failed')
         }
     }
 }
