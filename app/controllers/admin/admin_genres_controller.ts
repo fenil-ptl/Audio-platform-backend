@@ -17,6 +17,9 @@ export default class AdminGenresController {
                         'jazz',
                         'lofi',
                         'ambient',
+                        'house',
+                        'hip-hop',
+                        'classical',
                     ] as const),
                     slug: vine.string().minLength(5),
                 })
@@ -26,7 +29,7 @@ export default class AdminGenresController {
         const existingSlug = await Genre.query().where('slug', payload.slug).select('id').first()
 
         if (existingSlug) {
-            throw new Exception(i18n.t('messages.genre.slug_taken'), { status: 409 })
+            throw new Exception(i18n.t('message.genre.slug_taken'), { status: 409 })
         }
 
         await Genre.create({
@@ -35,7 +38,7 @@ export default class AdminGenresController {
         })
 
         return {
-            message: i18n.t('messages.genre.created'),
+            message: i18n.t('message.genre.created'),
         }
     }
 
@@ -58,7 +61,7 @@ export default class AdminGenresController {
             .first()
 
         if (!genre) {
-            throw new Exception(i18n.t('messages.genre.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.genre.not_found'), { status: 404 })
         }
 
         if (payload.slug && payload.slug !== genre.slug) {
@@ -69,14 +72,14 @@ export default class AdminGenresController {
                 .first()
 
             if (slugExists) {
-                throw new Exception(i18n.t('messages.genre.slug_taken'), { status: 409 })
+                throw new Exception(i18n.t('message.genre.slug_taken'), { status: 409 })
             }
         }
 
         await genre.merge(payload).save()
 
         return {
-            message: i18n.t('messages.genre.updated'),
+            message: i18n.t('message.genre.updated'),
         }
     }
 
@@ -90,14 +93,14 @@ export default class AdminGenresController {
             .first()
 
         if (!genre) {
-            throw new Exception(i18n.t('messages.genre.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.genre.not_found'), { status: 404 })
         }
 
         genre.deletedAt = DateTime.now()
         await genre.save()
 
         return {
-            message: i18n.t('messages.genre.deleted'),
+            message: i18n.t('message.genre.deleted'),
         }
     }
 }

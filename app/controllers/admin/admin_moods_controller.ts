@@ -18,7 +18,7 @@ export default class AdminMoodsController {
         const existingSlug = await Mood.query().where('slug', payload.slug).select('id').first()
 
         if (existingSlug) {
-            throw new Exception(i18n.t('messages.mood.slug_taken'), { status: 409 })
+            throw new Exception(i18n.t('message.mood.slug_taken'), { status: 409 })
         }
 
         await Mood.create({
@@ -27,7 +27,7 @@ export default class AdminMoodsController {
         })
 
         return {
-            message: i18n.t('messages.mood.created'),
+            message: i18n.t('message.mood.created'),
         }
     }
 
@@ -50,13 +50,13 @@ export default class AdminMoodsController {
             .first()
 
         if (!mood) {
-            throw new Exception(i18n.t('messages.mood.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.mood.not_found'), { status: 404 })
         }
 
         await mood.merge(payload).save()
 
         return {
-            message: i18n.t('messages.mood.updated'),
+            message: i18n.t('message.mood.updated'),
         }
     }
 
@@ -66,14 +66,14 @@ export default class AdminMoodsController {
         const mood = await Mood.query().where('id', id).whereNull('deleted_at').select('id').first()
 
         if (!mood) {
-            throw new Exception(i18n.t('messages.mood.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.mood.not_found'), { status: 404 })
         }
 
         mood.deletedAt = DateTime.now()
         await mood.save()
 
         return {
-            message: i18n.t('messages.mood.deleted'),
+            message: i18n.t('message.mood.deleted'),
         }
     }
 }

@@ -5,8 +5,8 @@ import Audio from '#models/audio'
 
 const pendingValidator = vine.compile(
     vine.object({
-        page: vine.number().positive().withoutDecimals().min(1).max(1000),
-        limit: vine.number().positive().withoutDecimals().min(1).max(100),
+        page: vine.number().positive().withoutDecimals().min(1).max(1000).optional(),
+        limit: vine.number().positive().withoutDecimals().min(1).max(100).optional(),
     })
 )
 
@@ -23,15 +23,15 @@ export default class AdminTracksController {
         const tracks = await Audio.query()
             .where('status', 'pending')
             .whereNull('deleted_at')
-            .select('id', 'title', 'slug', 'bpm', 'duration', 'status', 'created_at')
+            .select('id', 'seller_id', 'title', 'slug', 'bpm', 'duration', 'status', 'created_at')
             .preload('seller', (q) => q.select('id', 'fullName', 'email'))
             .preload('genres', (q) => q.select('id', 'name', 'slug'))
             .preload('moods', (q) => q.select('id', 'name', 'slug'))
             .orderBy('created_at', 'desc')
-            .paginate(page, limit)
+            .paginate(page ?? 1, limit ?? 10)
 
         return {
-            message: i18n.t('messages.track.pending_fetched'),
+            message: i18n.t('message.track.pending_fetched'),
             data: tracks.toJSON(),
         }
     }
@@ -41,7 +41,7 @@ export default class AdminTracksController {
         const audioId = Number(params.id)
 
         if (Number.isNaN(audioId)) {
-            throw new Exception(i18n.t('messages.track.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.track.not_found'), { status: 404 })
         }
 
         const audio = await Audio.query()
@@ -51,15 +51,15 @@ export default class AdminTracksController {
             .first()
 
         if (!audio) {
-            throw new Exception(i18n.t('messages.track.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.track.not_found'), { status: 404 })
         }
         if (audio.status !== 'pending') {
-            throw new Exception(i18n.t('messages.track.pending_only'), { status: 422 })
+            throw new Exception(i18n.t('message.track.pending_only'), { status: 422 })
         }
 
         await audio.merge({ status: 'approve', reviewedBy: adminId, rejectReason: null }).save()
 
-        return { message: i18n.t('messages.track.approved') }
+        return { message: i18n.t('message.track.approved') }
     }
 
     async rejectTrack({ auth, params, request, i18n }: HttpContext) {
@@ -67,7 +67,7 @@ export default class AdminTracksController {
         const audioId = Number(params.id)
 
         if (Number.isNaN(audioId)) {
-            throw new Exception(i18n.t('messages.track.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.track.not_found'), { status: 404 })
         }
 
         const { rejectReason } = await request.validateUsing(rejectValidator)
@@ -79,14 +79,14 @@ export default class AdminTracksController {
             .first()
 
         if (!audio) {
-            throw new Exception(i18n.t('messages.track.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.track.not_found'), { status: 404 })
         }
         if (audio.status === 'reject') {
-            throw new Exception(i18n.t('messages.track.already_rejected'), { status: 422 })
+            throw new Exception(i18n.t('message.track.already_rejected'), { status: 422 })
         }
 
         await audio.merge({ status: 'reject', reviewedBy: adminId, rejectReason }).save()
 
-        return { message: i18n.t('messages.track.rejected') }
+        return { message: i18n.t('message.track.rejected') }
     }
 }

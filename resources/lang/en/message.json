@@ -19,6 +19,7 @@
     "track": {
         "not_found": "Track not found",
         "created": "Audio track created successfully",
+        "updated": "Audio track updated successfully",
         "deleted": "Audio track deleted successfully",
         "fetched": "Audio track fetched successfully",
         "slug_taken": "Slug already taken",

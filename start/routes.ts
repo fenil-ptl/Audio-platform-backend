@@ -34,7 +34,7 @@ router
         router.post('/seller/track', [audioController, 'store']).middleware(createTrackthrottle)
         router.get('/seller/track', [audioController, 'index'])
         router.get('/seller/track/:id', [audioController, 'show'])
-        // router.patch('/:id', [audioController, 'update'])
+        router.patch('/seller/track/:id', [audioController, 'update'])
         router.delete('/seller/track/:id', [audioController, 'destroy'])
     })
     .middleware([middleware.auth(), middleware.role(['seller']), middleware.verifyEmail()])

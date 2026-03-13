@@ -5,8 +5,8 @@ import Audio from '#models/audio'
 
 const publicIndexValidator = vine.compile(
     vine.object({
-        page: vine.number().positive().min(1).max(1000),
-        limit: vine.number().positive().min(1).max(100),
+        page: vine.number().positive().min(1).max(1000).optional(),
+        limit: vine.number().positive().min(1).max(100).optional(),
     })
 )
 
@@ -31,30 +31,58 @@ export default class PublicController {
         const moodIds = this.parseIds(request.input('moodIds'))
 
         if (genreIds.length > 20) {
-            throw new Exception(i18n.t('messages.track.genre_limit'), { status: 422 })
+            throw new Exception(i18n.t('message.track.genre_limit'), { status: 422 })
         }
         if (moodIds.length > 20) {
-            throw new Exception(i18n.t('messages.track.mood_limit'), { status: 422 })
+            throw new Exception(i18n.t('message.track.mood_limit'), { status: 422 })
         }
+
+        const perPage = limit ?? 10
+        const currentPage = page ?? 1
+        const offset = (currentPage - 1) * perPage
 
         const query = Audio.query()
-            .where('status', 'approve')
-            .whereNull('deleted_at')
-            .select('id', 'title', 'slug', 'bpm', 'duration', 'file_url', 'image_url', 'created_at')
+            .where('audio.status', 'approve')
+            .whereNull('audio.deleted_at')
+            .select(
+                'audio.id',
+                'audio.title',
+                'audio.slug',
+                'audio.bpm',
+                'audio.duration',
+                'audio.file_url',
+                'audio.cover_image_url',
+                'audio.created_at'
+            )
             .preload('genres', (q) => q.select('id', 'name', 'slug'))
             .preload('moods', (q) => q.select('id', 'name', 'slug'))
-            .orderBy('created_at', 'desc')
+            .orderBy('audio.created_at', 'desc')
+            .limit(perPage)
+            .offset(offset)
 
         if (genreIds.length) {
-            query.whereHas('genres', (q) => q.whereIn('genre_id', genreIds))
+            query
+                .join('audio_genres', 'audio.id', 'audio_genres.audio_id')
+                .whereIn('audio_genres.genre_id', genreIds)
+                .distinct()
         }
         if (moodIds.length) {
-            query.whereHas('moods', (q) => q.whereIn('mood_id', moodIds))
+            query
+                .join('audio_moods', 'audio.id', 'audio_moods.audio_id')
+                .whereIn('audio_moods.mood_id', moodIds)
+                .distinct()
         }
 
-        const tracks = await query.paginate(page, limit)
+        const tracks = await query
 
-        return tracks.toJSON()
+        return {
+            meta: {
+                currentPage,
+                perPage,
+                hasMorePages: tracks.length === perPage,
+            },
+            data: tracks.map((t) => t.serialize()),
+        }
     }
 
     async show({ params, i18n }: HttpContext) {
@@ -69,20 +97,19 @@ export default class PublicController {
                 'bpm',
                 'duration',
                 'file_url',
-                'image_url',
-                'created_at',
-                'updated_at'
+                'cover_image_url',
+                'created_at'
             )
             .preload('genres', (q) => q.select('id', 'name', 'slug'))
             .preload('moods', (q) => q.select('id', 'name', 'slug'))
             .first()
 
         if (!track) {
-            throw new Exception(i18n.t('messages.track.not_found'), { status: 404 })
+            throw new Exception(i18n.t('message.track.not_found'), { status: 404 })
         }
 
         return {
-            message: i18n.t('messages.track.fetched'),
+            message: i18n.t('message.track.fetched'),
             data: track.serialize(),
         }
     }

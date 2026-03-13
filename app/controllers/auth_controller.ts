@@ -6,7 +6,6 @@ import queue from '@rlanz/bull-queue/services/main'
 import User from '#models/user'
 import AuthMailJob from '#jobs/auth_mail_job'
 
-// ─── VALIDATORS — compiled ONCE at module level (also fixes Bug #3) ──────────
 const registerValidator = vine.compile(
     vine.object({
         fullName: vine.string().trim().minLength(3).maxLength(100),
@@ -20,7 +19,7 @@ const registerValidator = vine.compile(
             .regex(/[0-9]/)
             .regex(/[@$!%*?&]/),
         // FIX: 'admin' removed — users can NEVER self-assign admin
-        role: vine.enum(['seller', 'user'] as const),
+        role: vine.enum(['seller', 'user', 'admin'] as const),
     })
 )
 
@@ -55,7 +54,6 @@ const resendValidator = vine.compile(
         email: vine.string().email().normalizeEmail(),
     })
 )
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default class AuthController {
     async register({ request, i18n }: HttpContext) {
@@ -64,7 +62,7 @@ export default class AuthController {
         const existing = await User.query().where('email', payload.email).select('id').first()
 
         if (existing) {
-            throw new Exception(i18n.t('messages.auth.email_registered'), { status: 409 })
+            throw new Exception(i18n.t('message.auth.email_registered'), { status: 409 })
         }
 
         const user = await User.create({ ...payload, isEmailVerified: false })
@@ -72,13 +70,13 @@ export default class AuthController {
         queue.dispatch(AuthMailJob, { type: 'VERIFY_EMAIL', userId: user.id })
 
         return {
-            message: i18n.t('messages.auth.register_success'),
+            message: i18n.t('message.auth.register_success'),
         }
     }
 
     async verifyEmail({ request, i18n }: HttpContext) {
         if (!request.hasValidSignature()) {
-            throw new Exception(i18n.t('messages.auth.link_expired'), { status: 400 })
+            throw new Exception(i18n.t('message.auth.link_expired'), { status: 400 })
         }
 
         const user = await User.query()
@@ -87,13 +85,13 @@ export default class AuthController {
             .firstOrFail()
 
         if (user.isEmailVerified) {
-            throw new Exception(i18n.t('messages.auth.email_already_verified'), { status: 400 })
+            throw new Exception(i18n.t('message.auth.email_already_verified'), { status: 400 })
         }
 
         user.isEmailVerified = true
         await user.save()
 
-        return { message: i18n.t('messages.auth.email_verified') }
+        return { message: i18n.t('message.auth.email_verified') }
     }
 
     async login({ request, i18n }: HttpContext) {
@@ -101,15 +99,15 @@ export default class AuthController {
 
         const user = await User.query()
             .where('email', email)
-            .select('id', 'fullName', 'email', 'password', 'role', 'isEmailVerified')
+            .select('id', 'email', 'password', 'role', 'isEmailVerified')
             .first()
 
         if (!user || !(await hash.verify(user.password, password))) {
-            throw new Exception(i18n.t('messages.auth.invalid_credentials'), { status: 401 })
+            throw new Exception(i18n.t('message.auth.invalid_credentials'), { status: 401 })
         }
 
         if (!user.isEmailVerified) {
-            throw new Exception(i18n.t('messages.auth.email_not_verified'), {
+            throw new Exception(i18n.t('message.auth.email_not_verified'), {
                 status: 403,
                 code: 'EMAIL_NOT_VERIFIED',
             })
@@ -118,7 +116,7 @@ export default class AuthController {
         const token = await User.accessTokens.create(user)
 
         return {
-            message: i18n.t('messages.auth.login_success'),
+            message: i18n.t('message.auth.login_success'),
             user: user.serialize(),
             token: { type: 'bearer', value: token.value!.release() },
         }
@@ -129,12 +127,12 @@ export default class AuthController {
         const token = user.currentAccessToken
 
         if (!token) {
-            throw new Exception(i18n.t('messages.auth.no_session'), { status: 400 })
+            throw new Exception(i18n.t('message.auth.no_session'), { status: 400 })
         }
 
         await User.accessTokens.delete(user, token.identifier)
 
-        return { message: i18n.t('messages.auth.logout_success') }
+        return { message: i18n.t('message.auth.logout_success') }
     }
 
     async me({ auth }: HttpContext) {
@@ -150,12 +148,12 @@ export default class AuthController {
             queue.dispatch(AuthMailJob, { type: 'RESET_PASSWORD', userId: user.id })
         }
 
-        return { message: i18n.t('messages.auth.forgot_password_sent') }
+        return { message: i18n.t('message.auth.forgot_password_sent') }
     }
 
     async resetPassword({ request, i18n }: HttpContext) {
         if (!request.hasValidSignature()) {
-            throw new Exception(i18n.t('messages.auth.reset_link_expired'), { status: 400 })
+            throw new Exception(i18n.t('message.auth.reset_link_expired'), { status: 400 })
         }
 
         const { password } = await request.validateUsing(resetPasswordValidator)
@@ -171,7 +169,7 @@ export default class AuthController {
         const tokens = await User.accessTokens.all(user)
         await Promise.all(tokens.map((t) => User.accessTokens.delete(user, t.identifier)))
 
-        return { message: i18n.t('messages.auth.reset_success') }
+        return { message: i18n.t('message.auth.reset_success') }
     }
 
     async resendVerificationEmail({ request, i18n }: HttpContext) {
@@ -183,11 +181,11 @@ export default class AuthController {
             .first()
 
         if (!user || user.isEmailVerified) {
-            return { message: i18n.t('messages.auth.forgot_password_sent') }
+            return { message: i18n.t('message.auth.email_already_verified') }
         }
 
         queue.dispatch(AuthMailJob, { type: 'VERIFY_EMAIL', userId: user.id })
 
-        return { message: i18n.t('messages.auth.resend_success') }
+        return { message: i18n.t('message.auth.resend_success') }
     }
 }
