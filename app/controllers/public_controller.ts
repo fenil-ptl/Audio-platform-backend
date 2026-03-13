@@ -1,46 +1,89 @@
-// import type { HttpContext } from '@adonisjs/core/http'
-import { PublicService } from '#services/public_service'
-import { paginatorValidator } from '#validators/pagination'
-import { inject } from '@adonisjs/core'
+import { Exception } from '@adonisjs/core/exceptions'
 import { HttpContext } from '@adonisjs/core/http'
+import vine from '@vinejs/vine'
+import Audio from '#models/audio'
 
-@inject()
 export default class PublicController {
-  constructor(private service: PublicService) {}
+    private parseIds(input: unknown): number[] {
+        if (typeof input === 'string') {
+            return input
+                .split(',')
+                .map((v) => Number(v.trim()))
+                .filter((n) => n > 0)
+        }
+        if (Array.isArray(input)) {
+            return input.map((v) => Number(v)).filter((n) => n > 0)
+        }
+        return []
+    }
 
-  async index({ request }: HttpContext) {
-    const { page, limit } = await request.validateUsing(paginatorValidator)
+    async index({ request, i18n }: HttpContext) {
+        const { page, limit } = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    page: vine.number().positive().min(1).max(1000),
+                    limit: vine.number().positive().min(1).max(100),
+                })
+            )
+        )
 
-    const genreInput = request.input('genreIds')
-    const moodInput = request.input('moodIds')
+        const genreIds = this.parseIds(request.input('genreIds'))
+        const moodIds = this.parseIds(request.input('moodIds'))
 
-    const genreIds =
-      typeof genreInput === 'string'
-        ? genreInput
-            .split(',')
-            .map((id) => Number(id.trim()))
-            .filter(Boolean)
-        : Array.isArray(genreInput)
-          ? genreInput.map((id) => Number(id)).filter(Boolean)
-          : []
+        if (genreIds.length > 20) {
+            throw new Exception(i18n.t('messages.track.genre_limit'), { status: 422 })
+        }
 
-    const moodIds =
-      typeof moodInput === 'string'
-        ? moodInput
-            .split(',')
-            .map((id) => Number(id.trim()))
-            .filter(Boolean)
-        : Array.isArray(moodInput)
-          ? moodInput.map((id) => Number(id)).filter(Boolean)
-          : []
+        if (moodIds.length > 20) {
+            throw new Exception(i18n.t('messages.track.mood_limit'), { status: 422 })
+        }
 
-    const tracks = await this.service.getAll(page, limit, genreIds, moodIds)
+        const query = Audio.query()
+            .where('status', 'approve')
+            .whereNull('deleted_at')
+            .select('id', 'title', 'slug', 'bpm', 'duration', 'file_url', 'image_url', 'created_at')
+            .orderBy('created_at', 'desc')
 
-    return tracks
-  }
-  async show({ params }: HttpContext) {
-    const track = await this.service.getById(params.id)
+        if (genreIds.length) {
+            query.whereHas('genres', (q) => q.whereIn('genre_id', genreIds))
+        }
 
-    return track
-  }
+        if (moodIds.length) {
+            query.whereHas('moods', (q) => q.whereIn('mood_id', moodIds))
+        }
+
+        const tracks = await query.paginate(page, limit)
+
+        return tracks.toJSON()
+    }
+
+    async show({ params, i18n }: HttpContext) {
+        const track = await Audio.query()
+            .where('id', Number(params.id))
+            .where('status', 'approve')
+            .whereNull('deleted_at')
+            .select(
+                'id',
+                'title',
+                'slug',
+                'bpm',
+                'duration',
+                'file_url',
+                'image_url',
+                'created_at',
+                'updated_at'
+            )
+            .preload('genres', (q) => q.select('id', 'name', 'slug'))
+            .preload('moods', (q) => q.select('id', 'name', 'slug'))
+            .first()
+
+        if (!track) {
+            throw new Exception(i18n.t('messages.track.not_found'), { status: 404 })
+        }
+
+        return {
+            message: i18n.t('messages.track.fetched'),
+            data: track.serialize(),
+        }
+    }
 }

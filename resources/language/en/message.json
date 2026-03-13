@@ -1,0 +1,44 @@
+{
+    "auth": {
+        "email_registered": "Email already registered",
+        "invalid_credentials": "Invalid email or password",
+        "email_not_verified": "Please verify your email before logging in",
+        "email_verified": "Email verified successfully, you can now log in",
+        "email_already_verified": "This email is already verified",
+        "link_expired": "Verification link is invalid or has expired, please request a new one",
+        "register_success": "Registration successful, please verify your email",
+        "login_success": "User logged in successfully",
+        "logout_success": "Logged out successfully",
+        "no_session": "No active session found",
+        "forgot_password_sent": "If an account exists with this email, you will receive a password reset link",
+        "reset_link_expired": "Password reset link is invalid or has expired",
+        "reset_success": "Password reset successfully, you can now log in",
+        "resend_success": "Verification email sent successfully",
+        "account_not_found": "No account found with this email"
+    },
+    "track": {
+        "not_found": "Track not found",
+        "created": "Audio track created successfully",
+        "deleted": "Audio track deleted successfully",
+        "fetched": "Audio track fetched successfully",
+        "slug_taken": "Slug already taken",
+        "approved": "Track approved successfully",
+        "rejected": "Track rejected successfully",
+        "already_rejected": "Track has already been rejected",
+        "pending_only": "Only pending tracks can be approved",
+        "pending_fetched": "Pending tracks fetched successfully"
+    },
+    "genre": {
+        "created": "Genre created successfully",
+        "updated": "Genre updated successfully",
+        "deleted": "Genre deleted successfully",
+        "not_found": "Genre not found",
+        "slug_taken": "Slug already exists"
+    },
+    "mood": {
+        "created": "Mood created successfully",
+        "updated": "Mood updated successfully",
+        "deleted": "Mood deleted successfully",
+        "not_found": "Mood not found"
+    }
+}

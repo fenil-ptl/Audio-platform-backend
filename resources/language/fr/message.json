@@ -1,0 +1,44 @@
+{
+    "auth": {
+        "email_registered": "Cet email est déjà enregistré",
+        "invalid_credentials": "Email ou mot de passe invalide",
+        "email_not_verified": "Veuillez vérifier votre email avant de vous connecter",
+        "email_verified": "Email vérifié avec succès, vous pouvez maintenant vous connecter",
+        "email_already_verified": "Cet email est déjà vérifié",
+        "link_expired": "Le lien de vérification est invalide ou expiré, veuillez en demander un nouveau",
+        "register_success": "Inscription réussie, veuillez vérifier votre email",
+        "login_success": "Utilisateur connecté avec succès",
+        "logout_success": "Déconnexion réussie",
+        "no_session": "Aucune session active trouvée",
+        "forgot_password_sent": "Si un compte existe avec cet email, vous recevrez un lien de réinitialisation",
+        "reset_link_expired": "Le lien de réinitialisation est invalide ou expiré",
+        "reset_success": "Mot de passe réinitialisé avec succès, vous pouvez maintenant vous connecter",
+        "resend_success": "Email de vérification envoyé avec succès",
+        "account_not_found": "Aucun compte trouvé avec cet email"
+    },
+    "track": {
+        "not_found": "Piste introuvable",
+        "created": "Piste audio créée avec succès",
+        "deleted": "Piste audio supprimée avec succès",
+        "fetched": "Piste audio récupérée avec succès",
+        "slug_taken": "Ce slug est déjà utilisé",
+        "approved": "Piste approuvée avec succès",
+        "rejected": "Piste rejetée avec succès",
+        "already_rejected": "La piste a déjà été rejetée",
+        "pending_only": "Seules les pistes en attente peuvent être approuvées",
+        "pending_fetched": "Pistes en attente récupérées avec succès"
+    },
+    "genre": {
+        "created": "Genre créé avec succès",
+        "updated": "Genre mis à jour avec succès",
+        "deleted": "Genre supprimé avec succès",
+        "not_found": "Genre introuvable",
+        "slug_taken": "Ce slug existe déjà"
+    },
+    "mood": {
+        "created": "Humeur créée avec succès",
+        "updated": "Humeur mise à jour avec succès",
+        "deleted": "Humeur supprimée avec succès",
+        "not_found": "Humeur introuvable"
+    }
+}
