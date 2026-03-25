@@ -3,42 +3,11 @@ import { inject } from '@adonisjs/core'
 import { Exception } from '@adonisjs/core/exceptions'
 import type { HttpContext } from '@adonisjs/core/http'
 import vine from '@vinejs/vine'
-import { DateTime } from 'luxon'
 import db from '@adonisjs/lucid/services/db'
 import Audio from '#models/audio'
-
-const storeValidator = vine.compile(
-    vine.object({
-        title: vine.string().trim().minLength(3),
-        slug: vine.string().trim().minLength(5).alphaNumeric({ allowDashes: true }),
-        bpm: vine.number().positive(),
-        duration: vine.number().positive(),
-        genreId: vine.array(vine.number().positive()).minLength(1),
-        moodId: vine.array(vine.number().positive()).minLength(1),
-        fileUrl: vine.file({ size: '5mb', extnames: ['mp3', 'm4a'] }),
-        imageUrl: vine.file({ size: '5mb', extnames: ['jpg', 'jpeg', 'png'] }),
-    })
-)
-
-const paginationValidator = vine.compile(
-    vine.object({
-        page: vine.number().positive().min(1).max(1000).optional(),
-        limit: vine.number().positive().min(1).max(100).optional(),
-    })
-)
-
-const updateValidator = vine.compile(
-    vine.object({
-        title: vine.string().trim().minLength(3).optional(),
-        slug: vine.string().trim().minLength(5).alphaNumeric({ allowDashes: true }).optional(),
-        bpm: vine.number().positive().optional(),
-        duration: vine.number().positive().optional(),
-        genreId: vine.array(vine.number().positive()).minLength(1).optional(),
-        moodId: vine.array(vine.number().positive()).minLength(1).optional(),
-        fileUrl: vine.file({ size: '5mb', extnames: ['mp3', 'm4a'] }).optional(),
-        imageUrl: vine.file({ size: '5mb', extnames: ['jpg', 'jpeg', 'png'] }).optional(),
-    })
-)
+import AudioDurationService from '#services/audio_duration_service'
+import fs from 'node:fs/promises'
+import { DateTime } from 'luxon'
 
 @inject()
 export default class AudioController {
@@ -46,29 +15,71 @@ export default class AudioController {
 
     async store({ request, auth, i18n }: HttpContext) {
         const user = auth.user!
-        const payload = await request.validateUsing(storeValidator)
 
+        // ── 1. Validate request ─────────────────────────────────────────
+        const payload = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    title: vine.string().trim().minLength(3),
+                    slug: vine.string().trim().minLength(5).alphaNumeric({ allowDashes: true }),
+                    bpm: vine.number().positive(),
+                    genreId: vine.array(vine.number().positive()).minLength(1),
+                    moodId: vine.array(vine.number().positive()).minLength(1),
+                    fileUrl: vine.file({ size: '50mb', extnames: ['mp3', 'm4a'] }),
+                    imageUrl: vine.file({ size: '5mb', extnames: ['jpg', 'jpeg', 'png'] }),
+                })
+            )
+        )
+
+        // ── 2. Slug uniqueness check ────────────────────────────────────
         const existingSlug = await Audio.query().where('slug', payload.slug).select('id').first()
+
         if (existingSlug) {
             throw new Exception(i18n.t('message.track.slug_taken'), { status: 409 })
         }
 
-        let uploadedAudio: Awaited<ReturnType<FileService['uploadAudio']>> | null = null
+        // ── 3. Move audio to tmp ONCE — ffprobe reads from here ─────────
+        // Capture metadata NOW before move() is called, as some fields
+        // may not be accessible after the file is moved
+        const audioMeta = {
+            size: payload.fileUrl.size ?? 0,
+            originalName: payload.fileUrl.clientName ?? '',
+            mimeType: `${payload.fileUrl.type}/${payload.fileUrl.subtype}`,
+        }
+
+        const tmpFilePath = await this.fileService.moveAudioToTmp(payload.fileUrl)
+
+        // ── 4. Extract duration from tmp file ───────────────────────────
+        let duration: number
+
+        try {
+            duration = await AudioDurationService.getDuration(tmpFilePath)
+        } catch (error) {
+            console.error('Duration extraction failed:', error)
+
+            await fs.unlink(tmpFilePath).catch((err) => console.warn('Tmp cleanup failed:', err))
+
+            throw new Exception(i18n.t('message.track.invalid_audio'), { status: 400 })
+        }
+
+        // ── 5. Move audio to storage + upload image in parallel ─────────
+        let uploadedAudio: Awaited<ReturnType<FileService['uploadAudioFromTmp']>> | null = null
         let uploadedImage: Awaited<ReturnType<FileService['uploadImage']>> | null = null
 
         try {
             ;[uploadedAudio, uploadedImage] = await Promise.all([
-                this.fileService.uploadAudio(payload.fileUrl, user.id),
+                this.fileService.uploadAudioFromTmp(tmpFilePath, user.id, audioMeta),
                 this.fileService.uploadImage(payload.imageUrl, user.id),
             ])
 
+            // ── 6. Persist to DB inside a transaction ───────────────────
             const audio = await db.transaction(async (trx) => {
                 const newAudio = await Audio.create(
                     {
                         title: payload.title,
                         slug: payload.slug,
                         bpm: payload.bpm,
-                        duration: payload.duration,
+                        duration,
                         fileUrl: uploadedAudio!.path,
                         imageUrl: uploadedImage!.path,
                         sellerId: user.id,
@@ -86,21 +97,32 @@ export default class AudioController {
             })
 
             return {
+                success: true,
                 message: i18n.t('message.track.created'),
                 data: audio.serialize(),
             }
         } catch (error) {
-            // Clean up uploaded files if DB transaction failed
+            // ── 7. Clean up storage files if DB transaction failed ──────
             await Promise.allSettled([
-                uploadedAudio ? this.fileService.delete(uploadedAudio.path) : Promise.resolve(),
+                uploadedAudio
+                    ? this.fileService.delete(uploadedAudio.path)
+                    : fs.unlink(tmpFilePath).catch(() => {}),
                 uploadedImage ? this.fileService.delete(uploadedImage.path) : Promise.resolve(),
             ])
+
             throw error
         }
     }
 
-    async index({ auth, request }: HttpContext) {
-        const { page, limit } = await request.validateUsing(paginationValidator)
+    async index({ auth, request, i18n }: HttpContext) {
+        const { page, limit } = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    page: vine.number().positive().min(1).max(1000).optional(),
+                    limit: vine.number().positive().min(1).max(100).optional(),
+                })
+            )
+        )
 
         const audios = await Audio.query()
             .where('seller_id', auth.user!.id)
@@ -109,7 +131,11 @@ export default class AudioController {
             .orderBy('created_at', 'desc')
             .paginate(page ?? 1, limit ?? 10)
 
-        return audios.toJSON()
+        return {
+            success: true,
+            message: i18n.t('seller.track.fetched'),
+            data: audios.toJSON(),
+        }
     }
 
     async show({ params, auth, i18n }: HttpContext) {
@@ -126,6 +152,7 @@ export default class AudioController {
         }
 
         return {
+            success: true,
             message: i18n.t('message.track.fetched'),
             data: audio.serialize(),
         }
@@ -156,7 +183,27 @@ export default class AudioController {
             throw new Exception(i18n.t('message.track.not_found'), { status: 404 })
         }
 
-        const payload = await request.validateUsing(updateValidator)
+        const payload = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    title: vine.string().trim().minLength(3).optional(),
+                    slug: vine
+                        .string()
+                        .trim()
+                        .minLength(5)
+                        .alphaNumeric({ allowDashes: true })
+                        .optional(),
+                    bpm: vine.number().positive().optional(),
+                    // duration removed — auto-extracted from file if file is uploaded
+                    genreId: vine.array(vine.number().positive()).minLength(1).optional(),
+                    moodId: vine.array(vine.number().positive()).minLength(1).optional(),
+                    fileUrl: vine.file({ size: '50mb', extnames: ['mp3', 'm4a'] }).optional(),
+                    imageUrl: vine
+                        .file({ size: '5mb', extnames: ['jpg', 'jpeg', 'png'] })
+                        .optional(),
+                })
+            )
+        )
 
         if (Object.keys(payload).length === 0) {
             throw new Exception('No fields provided to update', { status: 422 })
@@ -176,23 +223,55 @@ export default class AudioController {
 
         let newAudioPath: string | undefined
         let newImagePath: string | undefined
-        // Save old paths — only delete AFTER transaction succeeds
+        let newDuration: number | undefined
         let oldAudioPath: string | undefined
         let oldImagePath: string | undefined
 
         try {
+            // ── Handle new audio file ───────────────────────────────────────
             if (payload.fileUrl) {
-                const uploaded = await this.fileService.uploadAudio(payload.fileUrl, user.id)
-                oldAudioPath = audio.fileUrl // remember old, don't delete yet
+                // 1. Capture metadata BEFORE move
+                const audioMeta = {
+                    size: payload.fileUrl.size ?? 0,
+                    originalName: payload.fileUrl.clientName ?? '',
+                    mimeType: `${payload.fileUrl.type}/${payload.fileUrl.subtype}`,
+                }
+
+                // 2. Move to tmp ONCE for ffprobe
+                const tmpFilePath = await this.fileService.moveAudioToTmp(payload.fileUrl)
+
+                // 3. Extract duration from tmp file
+                try {
+                    newDuration = await AudioDurationService.getDuration(tmpFilePath)
+                } catch (error) {
+                    console.error('Duration extraction failed:', error)
+
+                    await fs
+                        .unlink(tmpFilePath)
+                        .catch((err) => console.warn('Tmp cleanup failed:', err))
+
+                    throw new Exception(i18n.t('message.track.invalid_audio'), { status: 400 })
+                }
+
+                // 4. Move from tmp to final storage using meta object
+                const uploaded = await this.fileService.uploadAudioFromTmp(
+                    tmpFilePath,
+                    user.id,
+                    audioMeta // ← third argument, no more TS error
+                )
+
+                oldAudioPath = audio.fileUrl
                 newAudioPath = uploaded.path
             }
 
+            // ── Handle new image file ───────────────────────────────────────
             if (payload.imageUrl) {
                 const uploaded = await this.fileService.uploadImage(payload.imageUrl, user.id)
-                oldImagePath = audio.imageUrl // remember old, don't delete yet
+                oldImagePath = audio.imageUrl
                 newImagePath = uploaded.path
             }
 
+            // ── Persist changes in a transaction ───────────────────────────
             await db.transaction(async (trx) => {
                 audio.useTransaction(trx)
 
@@ -200,9 +279,9 @@ export default class AudioController {
                     ...(payload.title && { title: payload.title }),
                     ...(payload.slug && { slug: payload.slug }),
                     ...(payload.bpm && { bpm: payload.bpm }),
-                    ...(payload.duration && { duration: payload.duration }),
+                    ...(newDuration && { duration: newDuration }), // from ffprobe, not user input
                     ...(newAudioPath && { fileUrl: newAudioPath }),
-                    ...(newImagePath && { imageUrl: newImagePath }),
+                    ...(newImagePath && { coverImageUrl: newImagePath }),
                     status: 'pending',
                 })
 
@@ -217,13 +296,13 @@ export default class AudioController {
                 }
             })
 
-            // Transaction committed — now safe to delete old files
+            // ── Transaction succeeded — delete old files ────────────────────
             await Promise.allSettled([
                 oldAudioPath ? this.fileService.delete(oldAudioPath) : Promise.resolve(),
                 oldImagePath ? this.fileService.delete(oldImagePath) : Promise.resolve(),
             ])
         } catch (error) {
-            // Transaction failed — delete the newly uploaded files (old files untouched)
+            // ── Transaction failed — delete newly uploaded files ────────────
             await Promise.allSettled([
                 newAudioPath ? this.fileService.delete(newAudioPath) : Promise.resolve(),
                 newImagePath ? this.fileService.delete(newImagePath) : Promise.resolve(),
@@ -249,11 +328,11 @@ export default class AudioController {
             .firstOrFail()
 
         return {
+            success: true,
             message: i18n.t('message.track.updated'),
             data: updated.serialize(),
         }
     }
-
     async destroy({ params, auth, i18n }: HttpContext) {
         const audio = await Audio.query()
             .where('id', Number(params.id))
@@ -270,7 +349,9 @@ export default class AudioController {
         await audio.save()
 
         return {
+            success: true,
             message: i18n.t('message.track.deleted'),
+            data: null,
         }
     }
 }
