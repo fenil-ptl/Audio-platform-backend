@@ -7,6 +7,7 @@
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,
         "skipLibCheck": true,
+        "esModuleInterop": true,
         "rewriteRelativeImportExtensions": true,
         "paths": {
             "#controllers/*": ["./app/controllers/*.js"],

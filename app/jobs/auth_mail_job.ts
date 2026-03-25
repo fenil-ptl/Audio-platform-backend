@@ -15,7 +15,7 @@ export default class AuthMailJob extends Job {
     async handle(data: AuthMailJobData) {
         const user = await User.query()
             .where('id', data.userId)
-            .select('id', 'fullName', 'email')
+            .select('id', 'fullName', 'email', 'updatedAt')
             .firstOrFail()
 
         const baseUrl = env.get('APP_URL').replace(/\/$/, '')
@@ -57,7 +57,6 @@ export default class AuthMailJob extends Job {
         }
     }
 
-    // FIX: was console.error() — now uses structured Logger visible in all log aggregators
     async rescue(data: AuthMailJobData, error: Error) {
         Logger.error(
             {

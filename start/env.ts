@@ -12,47 +12,54 @@
 import { Env } from '@adonisjs/core/env'
 
 export default await Env.create(new URL('../', import.meta.url), {
-  NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
-  PORT: Env.schema.number(),
-  APP_KEY: Env.schema.string(),
-  APP_URL: Env.schema.string(),
-  HOST: Env.schema.string({ format: 'host' }),
-  LOG_LEVEL: Env.schema.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']),
+    NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
+    PORT: Env.schema.number(),
+    APP_KEY: Env.schema.string(),
+    APP_URL: Env.schema.string(),
+    HOST: Env.schema.string({ format: 'host' }),
+    LOG_LEVEL: Env.schema.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']),
 
-  /*
+    /*
 |----------------------------------------------------------
 | Variables for configuring database connection
 |----------------------------------------------------------
 */
-  DB_HOST: Env.schema.string({ format: 'host' }),
-  DB_PORT: Env.schema.number(),
-  DB_USER: Env.schema.string(),
-  DB_PASSWORD: Env.schema.string.optional(),
-  DB_DATABASE: Env.schema.string(),
+    DB_HOST: Env.schema.string({ format: 'host' }),
+    DB_PORT: Env.schema.number(),
+    DB_USER: Env.schema.string(),
+    DB_PASSWORD: Env.schema.string.optional(),
+    DB_DATABASE: Env.schema.string(),
 
-  /*
+    /*
 |----------------------------------------------------------
 | Variables for configuring the mail package
 |----------------------------------------------------------
 */
-  SMTP_HOST: Env.schema.string(),
-  SMTP_PORT: Env.schema.string(),
-  SMTP_USERNAME: Env.schema.string(),
-  SMTP_PASSWORD: Env.schema.string(),
+    SMTP_HOST: Env.schema.string(),
+    SMTP_PORT: Env.schema.string(),
+    SMTP_USERNAME: Env.schema.string(),
+    SMTP_PASSWORD: Env.schema.string(),
 
-  /*
+    /*
 |----------------------------------------------------------
 | Variables for configuring the limiter package
 |----------------------------------------------------------
 */
-  LIMITER_STORE: Env.schema.enum(['database', 'memory'] as const),
+    LIMITER_STORE: Env.schema.enum(['database', 'memory'] as const),
 
-  /*
+    /*
+|----------------------------------------------------------
+| Variables for @rlanz/bull-queue
+|----------------------------------------------------------
+*/
+    QUEUE_REDIS_HOST: Env.schema.string({ format: 'host' }),
+    QUEUE_REDIS_PORT: Env.schema.number(),
+    QUEUE_REDIS_PASSWORD: Env.schema.string.optional(),
+
+    /*
   |----------------------------------------------------------
-  | Variables for @rlanz/bull-queue
+  | Variables for configuring session package
   |----------------------------------------------------------
   */
-  QUEUE_REDIS_HOST: Env.schema.string({ format: 'host' }),
-  QUEUE_REDIS_PORT: Env.schema.number(),
-  QUEUE_REDIS_PASSWORD: Env.schema.string.optional()
+    SESSION_DRIVER: Env.schema.enum(['cookie', 'memory'] as const),
 })

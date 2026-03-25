@@ -26,6 +26,15 @@ export const forgetPasswordthrottle = limiter.define('forget-password', () => {
 export const createTrackthrottle = limiter.define('create-track', () => {
     return limiter.allowRequests(5).every('15 minute')
 })
+
 export const publicthrottle = limiter.define('public', () => {
     return limiter.allowRequests(5).every('15 minute')
+})
+
+export const publicListthrottle = limiter.define('index', () => {
+    return limiter.allowRequests(30).every('15 minute')
+})
+
+export const resendEmailthrottle = limiter.define('resend', () => {
+    return limiter.allowRequests(15).every('15 minute')
 })

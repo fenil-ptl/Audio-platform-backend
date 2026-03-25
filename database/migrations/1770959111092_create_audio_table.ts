@@ -33,7 +33,7 @@ export default class extends BaseSchema {
                 .onUpdate('CASCADE')
                 .nullable()
             table.timestamp('created_at', { useTz: true }).defaultTo(this.now())
-            table.timestamp('reviewed_at', { useTz: true }).defaultTo(this.now())
+            table.timestamp('reviewed_at', { useTz: true }).nullable()
             table.timestamp('deleted_at', { useTz: true }).nullable()
         })
     }

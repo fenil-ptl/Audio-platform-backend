@@ -1,18 +1,16 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
-    protected tableName = 'audio_genres'
-
     async up() {
-        this.schema.alterTable(this.tableName, (table) => {
-            // Add optimized composite index for filtering
-            table.index(['genre_id', 'audio_id'], 'idx_audio_genre_combo')
+        this.schema.alterTable('audio_genres', (table) => {
+            // ✅ Only add index if it doesn't already exist
+            table.index(['audio_id', 'genre_id'], 'audio_genres_audio_id_genre_id_index')
         })
     }
 
     async down() {
-        this.schema.alterTable(this.tableName, (table) => {
-            table.dropIndex(['genre_id', 'audio_id'], 'idx_audio_genre_combo')
+        this.schema.alterTable('audio_genres', (table) => {
+            table.dropIndex(['audio_id', 'genre_id'], 'audio_genres_audio_id_genre_id_index')
         })
     }
 }

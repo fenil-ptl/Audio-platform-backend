@@ -4,33 +4,27 @@ import type { HttpContext } from '@adonisjs/core/http'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 
-const createGenreValidator = vine.compile(
-    vine.object({
-        name: vine.enum([
-            'pop',
-            'rock',
-            'folk',
-            'electronic',
-            'jazz',
-            'lofi',
-            'ambient',
-            'house',
-            'hip-hop',
-            'classical',
-        ] as const),
-        slug: vine.string().minLength(5),
-    })
-)
-
-const editGenreValidator = vine.compile(
-    vine.object({
-        name: vine.string().trim().optional(),
-        slug: vine.string().optional(),
-    })
-)
 export default class AdminGenresController {
     async createGenres({ request, i18n }: HttpContext) {
-        const payload = await request.validateUsing(createGenreValidator)
+        const payload = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    name: vine.enum([
+                        'pop',
+                        'rock',
+                        'folk',
+                        'electronic',
+                        'jazz',
+                        'lofi',
+                        'ambient',
+                        'house',
+                        'hip-hop',
+                        'classical',
+                    ] as const),
+                    slug: vine.string().minLength(5),
+                })
+            )
+        )
 
         const existingSlug = await Genre.query().where('slug', payload.slug).select('id').first()
 
@@ -38,34 +32,42 @@ export default class AdminGenresController {
             throw new Exception(i18n.t('message.genre.slug_taken'), { status: 409 })
         }
 
-        await Genre.create({
+        const genre = await Genre.create({
             name: payload.name,
             slug: payload.slug,
         })
 
         return {
+            success: true,
             message: i18n.t('message.genre.created'),
+            data: genre.serialize({ fields: ['id', 'name', 'slug'] }),
         }
     }
 
     async editGenres({ request, params, i18n }: HttpContext) {
         const id = Number(params.id)
 
-        const payload = await request.validateUsing(editGenreValidator)
+        const payload = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    name: vine.string().trim().minLength(2).optional(),
+                    slug: vine
+                        .string()
+                        .trim()
+                        .minLength(3)
+                        .alphaNumeric({ allowDashes: true }) // ← Best for slugs
+                        .optional(),
+                })
+            )
+        )
 
-        const genre = await Genre.query()
-            .where('id', id)
-            .whereNull('deleted_at')
-            .select('id', 'name', 'slug')
-            .first()
+        const genre = await Genre.query().where('id', id).whereNull('deleted_at').firstOrFail()
 
-        if (!genre) {
-            throw new Exception(i18n.t('message.genre.not_found'), { status: 404 })
-        }
-
+        // Slug uniqueness check (Only if slug is actually changing)
         if (payload.slug && payload.slug !== genre.slug) {
             const slugExists = await Genre.query()
                 .where('slug', payload.slug)
+                .whereNot('id', id) // ← Important: exclude current genre
                 .whereNull('deleted_at')
                 .select('id')
                 .first()
@@ -75,10 +77,13 @@ export default class AdminGenresController {
             }
         }
 
+        // Update
         await genre.merge(payload).save()
 
         return {
+            success: true,
             message: i18n.t('message.genre.updated'),
+            data: genre.serialize({ fields: ['id', 'name', 'slug'] }), // Recommended
         }
     }
 
@@ -99,7 +104,14 @@ export default class AdminGenresController {
         await genre.save()
 
         return {
+            success: true,
             message: i18n.t('message.genre.deleted'),
+            data: {
+                id: genre.id,
+                name: genre.name,
+                slug: genre.slug,
+                deletedAt: genre.deletedAt,
+            },
         }
     }
 }

@@ -2,23 +2,18 @@ import { Exception } from '@adonisjs/core/exceptions'
 import type { HttpContext } from '@adonisjs/core/http'
 import vine from '@vinejs/vine'
 import Audio from '#models/audio'
-
-const pendingValidator = vine.compile(
-    vine.object({
-        page: vine.number().positive().withoutDecimals().min(1).max(1000).optional(),
-        limit: vine.number().positive().withoutDecimals().min(1).max(100).optional(),
-    })
-)
-
-const rejectValidator = vine.compile(
-    vine.object({
-        rejectReason: vine.string().trim().minLength(10).maxLength(500),
-    })
-)
+import { DateTime } from 'luxon'
 
 export default class AdminTracksController {
     async pendingTracks({ request, i18n }: HttpContext) {
-        const { page, limit } = await request.validateUsing(pendingValidator)
+        const { page, limit } = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    page: vine.number().positive().withoutDecimals().min(1).max(1000).optional(),
+                    limit: vine.number().positive().withoutDecimals().min(1).max(100).optional(),
+                })
+            )
+        )
 
         const tracks = await Audio.query()
             .where('status', 'pending')
@@ -31,8 +26,10 @@ export default class AdminTracksController {
             .paginate(page ?? 1, limit ?? 10)
 
         return {
+            success: true,
             message: i18n.t('message.track.pending_fetched'),
-            data: tracks.toJSON(),
+            data: tracks.toJSON().data,
+            meta: tracks.toJSON().meta,
         }
     }
 
@@ -57,9 +54,24 @@ export default class AdminTracksController {
             throw new Exception(i18n.t('message.track.pending_only'), { status: 422 })
         }
 
-        await audio.merge({ status: 'approve', reviewedBy: adminId, rejectReason: null }).save()
+        await audio
+            .merge({
+                status: 'approve',
+                reviewedBy: adminId,
+                rejectReason: null,
+                reviewedAt: DateTime.now(),
+            })
+            .save()
 
-        return { message: i18n.t('message.track.approved') }
+        return {
+            success: true,
+            message: i18n.t('message.track.approved'),
+            data: {
+                id: audio.id,
+                status: audio.status,
+                reviewedAt: audio.reviewedAt,
+            },
+        }
     }
 
     async rejectTrack({ auth, params, request, i18n }: HttpContext) {
@@ -70,7 +82,13 @@ export default class AdminTracksController {
             throw new Exception(i18n.t('message.track.not_found'), { status: 404 })
         }
 
-        const { rejectReason } = await request.validateUsing(rejectValidator)
+        const { rejectReason } = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    rejectReason: vine.string().trim().minLength(10).maxLength(500),
+                })
+            )
+        )
 
         const audio = await Audio.query()
             .where('id', audioId)
@@ -87,6 +105,15 @@ export default class AdminTracksController {
 
         await audio.merge({ status: 'reject', reviewedBy: adminId, rejectReason }).save()
 
-        return { message: i18n.t('message.track.rejected') }
+        return {
+            success: true,
+            message: i18n.t('message.track.rejected'),
+            data: {
+                id: audio.id,
+                status: 'reject',
+                rejectReason: rejectReason,
+                reviewedBy: adminId,
+            },
+        }
     }
 }

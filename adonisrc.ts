@@ -30,6 +30,7 @@ export default defineConfig({
         () => import('@adonisjs/lucid/commands'),
         () => import('@adonisjs/mail/commands'),
         () => import('@rlanz/bull-queue/commands'),
+        () => import('@adonisjs/session/commands'),
     ],
 
     /*
@@ -56,6 +57,7 @@ export default defineConfig({
         () => import('@adonisjs/limiter/limiter_provider'),
         () => import('@rlanz/bull-queue/queue_provider'),
         () => import('@adonisjs/i18n/i18n_provider'),
+        () => import('@adonisjs/session/session_provider'),
     ],
 
     /*

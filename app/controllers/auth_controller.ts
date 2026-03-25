@@ -1,76 +1,46 @@
 import { HttpContext } from '@adonisjs/core/http'
 import { Exception } from '@adonisjs/core/exceptions'
 import vine from '@vinejs/vine'
-import hash from '@adonisjs/core/services/hash'
 import queue from '@rlanz/bull-queue/services/main'
 import User from '#models/user'
 import AuthMailJob from '#jobs/auth_mail_job'
-
-const registerValidator = vine.compile(
-    vine.object({
-        fullName: vine.string().trim().minLength(3).maxLength(100),
-        email: vine.string().email().normalizeEmail(),
-        password: vine
-            .string()
-            .minLength(8)
-            .maxLength(64)
-            .regex(/[A-Z]/)
-            .regex(/[a-z]/)
-            .regex(/[0-9]/)
-            .regex(/[@$!%*?&]/),
-        // FIX: 'admin' removed — users can NEVER self-assign admin
-        role: vine.enum(['seller', 'user', 'admin'] as const),
-    })
-)
-
-const loginValidator = vine.compile(
-    vine.object({
-        email: vine.string().email().normalizeEmail(),
-        password: vine.string().minLength(8).maxLength(64),
-    })
-)
-
-const forgotPasswordValidator = vine.compile(
-    vine.object({
-        email: vine.string().email().normalizeEmail(),
-    })
-)
-
-const resetPasswordValidator = vine.compile(
-    vine.object({
-        password: vine
-            .string()
-            .minLength(8)
-            .maxLength(64)
-            .regex(/[A-Z]/)
-            .regex(/[a-z]/)
-            .regex(/[0-9]/)
-            .regex(/[@$!%*?&]/),
-    })
-)
-
-const resendValidator = vine.compile(
-    vine.object({
-        email: vine.string().email().normalizeEmail(),
-    })
-)
+import db from '@adonisjs/lucid/services/db'
 
 export default class AuthController {
     async register({ request, i18n }: HttpContext) {
-        const payload = await request.validateUsing(registerValidator)
+        const payload = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    fullName: vine.string().trim().minLength(3).maxLength(100),
+                    email: vine.string().email().normalizeEmail(),
+                    password: vine
+                        .string()
+                        .minLength(8)
+                        .maxLength(64)
+                        .regex(/[A-Z]/)
+                        .regex(/[a-z]/)
+                        .regex(/[0-9]/)
+                        .regex(/[@$!%*?&]/),
+                    role: vine.enum(['seller', 'user'] as const),
+                })
+            )
+        )
 
-        const existing = await User.query().where('email', payload.email).select('id').first()
+        try {
+            const user = await User.create({ ...payload, isEmailVerified: false })
 
-        if (existing) {
-            throw new Exception(i18n.t('message.auth.email_registered'), { status: 409 })
-        }
+            queue.dispatch(AuthMailJob, { type: 'VERIFY_EMAIL', userId: user.id })
 
-        const user = await User.create({ ...payload, isEmailVerified: false })
-
-        queue.dispatch(AuthMailJob, { type: 'VERIFY_EMAIL', userId: user.id })
-
-        return {
-            message: i18n.t('message.auth.register_success'),
+            return {
+                success: true,
+                message: i18n.t('message.auth.register_success'),
+                data: null,
+            }
+        } catch (error) {
+            if (error.code === 'ER_DUP_ENTRY') {
+                throw new Exception(i18n.t('message.auth.email_registered'), { status: 409 })
+            }
+            throw error
         }
     }
 
@@ -79,9 +49,14 @@ export default class AuthController {
             throw new Exception(i18n.t('message.auth.link_expired'), { status: 400 })
         }
 
+        const id = Number(request.param('id'))
+        if (!Number.isInteger(id) || id < 1) {
+            throw new Exception(i18n.t('message.auth.link_expired'), { status: 400 })
+        }
+
         const user = await User.query()
-            .where('id', request.param('id'))
-            .select('id', 'isEmailVerified')
+            .where('id', id)
+            .select('id', 'is_email_verified')
             .firstOrFail()
 
         if (user.isEmailVerified) {
@@ -91,34 +66,35 @@ export default class AuthController {
         user.isEmailVerified = true
         await user.save()
 
-        return { message: i18n.t('message.auth.email_verified') }
+        return {
+            success: true,
+            message: i18n.t('message.auth.email_verified'),
+            data: null,
+        }
     }
 
     async login({ request, i18n }: HttpContext) {
-        const { email, password } = await request.validateUsing(loginValidator)
+        const { email, password } = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    email: vine.string().email().normalizeEmail(),
+                    password: vine.string().minLength(8).maxLength(64),
+                })
+            )
+        )
 
-        const user = await User.query()
-            .where('email', email)
-            .select('id', 'email', 'password', 'role', 'isEmailVerified')
-            .first()
+        const user = await User.verifyCredentials(email, password)
 
-        if (!user || !(await hash.verify(user.password, password))) {
-            throw new Exception(i18n.t('message.auth.invalid_credentials'), { status: 401 })
-        }
-
-        if (!user.isEmailVerified) {
-            throw new Exception(i18n.t('message.auth.email_not_verified'), {
-                status: 403,
-                code: 'EMAIL_NOT_VERIFIED',
-            })
-        }
-
-        const token = await User.accessTokens.create(user)
+        const token = await User.accessTokens.create(user, ['*'], {
+            expiresIn: '1d',
+        })
 
         return {
+            success: true,
             message: i18n.t('message.auth.login_success'),
-            user: user.serialize(),
-            token: { type: 'bearer', value: token.value!.release() },
+            data: {
+                token: token.value!.release(),
+            },
         }
     }
 
@@ -132,15 +108,37 @@ export default class AuthController {
 
         await User.accessTokens.delete(user, token.identifier)
 
-        return { message: i18n.t('message.auth.logout_success') }
+        return {
+            success: true,
+            message: i18n.t('message.auth.logout_success'),
+            data: null,
+        }
     }
 
-    async me({ auth }: HttpContext) {
-        return { user: auth.user!.serialize() }
+    async me({ auth, i18n }: HttpContext) {
+        const user = auth.user!
+
+        return {
+            success: true,
+            message: i18n.t('message.auth.profile_fetch'),
+            data: {
+                id: user.id,
+                fullName: user.fullName,
+                email: user.email,
+                role: user.role,
+                isEmailVerified: user.isEmailVerified,
+            },
+        }
     }
 
     async forgotPassword({ request, i18n }: HttpContext) {
-        const { email } = await request.validateUsing(forgotPasswordValidator)
+        const { email } = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    email: vine.string().email().normalizeEmail(),
+                })
+            )
+        )
 
         const user = await User.query().where('email', email).select('id').first()
 
@@ -148,7 +146,11 @@ export default class AuthController {
             queue.dispatch(AuthMailJob, { type: 'RESET_PASSWORD', userId: user.id })
         }
 
-        return { message: i18n.t('message.auth.forgot_password_sent') }
+        return {
+            success: true,
+            message: i18n.t('message.auth.forgot_password_sent'),
+            data: null,
+        }
     }
 
     async resetPassword({ request, i18n }: HttpContext) {
@@ -156,39 +158,70 @@ export default class AuthController {
             throw new Exception(i18n.t('message.auth.reset_link_expired'), { status: 400 })
         }
 
-        const { password } = await request.validateUsing(resetPasswordValidator)
+        const { password } = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    password: vine
+                        .string()
+                        .minLength(8)
+                        .maxLength(64)
+                        .regex(/^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[@$!%*?&])/),
+                })
+            )
+        )
 
-        const user = await User.query()
-            .where('id', request.param('id'))
-            .select('id', 'password')
-            .firstOrFail()
+        const id = Number(request.param('id'))
+        if (!Number.isInteger(id) || id < 1) {
+            throw new Exception(i18n.t('message.auth.reset_link_expired'), { status: 400 })
+        }
 
-        user.password = password
-        await user.save()
+        await db.transaction(async (trx) => {
+            const user = await User.query({ client: trx })
+                .where('id', id)
+                .select('id', 'password')
+                .firstOrFail()
 
-        const tokens = await User.accessTokens.all(user)
-        await Promise.all(tokens.map((t) => User.accessTokens.delete(user, t.identifier)))
+            user.password = password
+            await user.save()
 
-        return { message: i18n.t('message.auth.reset_success') }
+            await trx.from('auth_access_tokens').where('tokenable_id', user.id).delete()
+        })
+
+        return {
+            success: true,
+            message: i18n.t('message.auth.reset_success'),
+            data: null,
+        }
     }
 
     async resendVerificationEmail({ request, i18n }: HttpContext) {
-        const { email } = await request.validateUsing(resendValidator)
+        const { email } = await request.validateUsing(
+            vine.compile(
+                vine.object({
+                    email: vine.string().email().normalizeEmail(),
+                })
+            )
+        )
 
         const user = await User.query()
             .where('email', email)
-            .select('id', 'isEmailVerified')
+            .select('id', 'is_email_verified')
             .first()
 
-        if (!user) {
-            return { message: i18n.t('message.auth.resend_success') }
-        }
-        if (user.isEmailVerified) {
-            return { message: i18n.t('message.auth.email_already_verified') }
+        if (!user || user.isEmailVerified) {
+            return {
+                success: true,
+                message: i18n.t('message.auth.resend_success'),
+                data: null,
+            }
         }
 
         queue.dispatch(AuthMailJob, { type: 'VERIFY_EMAIL', userId: user.id })
 
-        return { message: i18n.t('message.auth.resend_success') }
+        return {
+            success: true,
+            message: i18n.t('message.auth.resend_success'),
+            data: null,
+        }
     }
 }
