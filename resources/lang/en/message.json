@@ -3,6 +3,7 @@
         "email_registered": "Email already registered",
         "invalid_credentials": "Invalid email or password",
         "email_not_verified": "Please verify your email before logging in",
+        "user_not_found": " user not found ",
         "email_verified": "Email verified successfully, you can now log in",
         "email_already_verified": "This email is already verified",
         "link_expired": "Verification link is invalid or has expired, please request a new one",
@@ -14,7 +15,11 @@
         "reset_link_expired": "Password reset link is invalid or has expired",
         "reset_success": "Password reset successfully, you can now log in",
         "resend_success": "Verification email sent successfully",
-        "account_not_found": "No account found with this email"
+        "account_not_found": "No account found with this email",
+        "reset_link_already_used": "This password reset link has already been used",
+        "no_token": "No token provided in the request",
+        "profile_fetch":"profile fetched successfully"
+
     },
     "track": {
         "not_found": "Track not found",
@@ -27,7 +32,9 @@
         "rejected": "Track rejected successfully",
         "already_rejected": "Track has already been rejected",
         "pending_only": "Only pending tracks can be approved",
-        "pending_fetched": "Pending tracks fetched successfully"
+        "pending_fetched": "Pending tracks fetched successfully",
+        "invalid_audio":"invalid audio",
+        "upload_failed":" failed to upload audio file"
     },
     "genre": {
         "created": "Genre created successfully",
@@ -41,5 +48,19 @@
         "updated": "Mood updated successfully",
         "deleted": "Mood deleted successfully",
         "not_found": "Mood not found"
+    },
+    "favorite": {
+        "added": "Track added to favorites",
+        "removed": "Track removed from favorites",
+        "fetched": "Favorites fetched successfully",
+        "not_found": "Favorite not found"
+    },
+    "review": {
+        "created": "Review submitted successfully",
+        "updated": "Review updated successfully",
+        "deleted": "Review deleted successfully",
+        "fetched": "Reviews fetched successfully",
+        "not_found": "Review not found",
+        "already_reviewed": "You have already reviewed this track"
     }
 }
