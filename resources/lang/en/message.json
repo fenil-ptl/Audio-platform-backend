@@ -18,8 +18,7 @@
         "account_not_found": "No account found with this email",
         "reset_link_already_used": "This password reset link has already been used",
         "no_token": "No token provided in the request",
-        "profile_fetch":"profile fetched successfully"
-
+        "profile_fetch": "profile fetched successfully"
     },
     "track": {
         "not_found": "Track not found",
@@ -33,8 +32,8 @@
         "already_rejected": "Track has already been rejected",
         "pending_only": "Only pending tracks can be approved",
         "pending_fetched": "Pending tracks fetched successfully",
-        "invalid_audio":"invalid audio",
-        "upload_failed":" failed to upload audio file"
+        "invalid_audio": "invalid audio",
+        "upload_failed": " failed to upload audio file"
     },
     "genre": {
         "created": "Genre created successfully",
@@ -62,5 +61,8 @@
         "fetched": "Reviews fetched successfully",
         "not_found": "Review not found",
         "already_reviewed": "You have already reviewed this track"
+    },
+    "subscription": {
+        "required": "An active subscription is required to upload tracks."
     }
 }

@@ -48,4 +48,5 @@ export const middleware = router.named({
     role: () => import('#middleware/role_middleware'),
     auth: () => import('#middleware/auth_middleware'),
     detectLocale: () => import('#middleware/detect_user_locale_middleware'),
+    checkSubscription: () => import('#middleware/check_subscription_middleware'),
 })

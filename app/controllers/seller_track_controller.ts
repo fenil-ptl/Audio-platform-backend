@@ -13,8 +13,12 @@ import { DateTime } from 'luxon'
 export default class AudioController {
     constructor(private fileService: FileService) {}
 
-    async store({ request, auth, i18n }: HttpContext) {
+    async store({ request, auth, i18n, ...ctx }: HttpContext) {
         const user = auth.user!
+        const limits = (ctx as any).planLimits
+
+        const maxSizeStr = `${limits.maxFileSizeMb}mb`
+        const allowedExts = limits.allowedFormats
 
         // ── 1. Validate request ─────────────────────────────────────────
         const payload = await request.validateUsing(
@@ -25,7 +29,7 @@ export default class AudioController {
                     bpm: vine.number().positive(),
                     genreId: vine.array(vine.number().positive()).minLength(1),
                     moodId: vine.array(vine.number().positive()).minLength(1),
-                    fileUrl: vine.file({ size: '50mb', extnames: ['mp3', 'm4a'] }),
+                    fileUrl: vine.file({ size: maxSizeStr, extnames: allowedExts }),
                     imageUrl: vine.file({ size: '5mb', extnames: ['jpg', 'jpeg', 'png'] }),
                 })
             )
@@ -142,6 +146,7 @@ export default class AudioController {
         const audio = await Audio.query()
             .where('id', Number(params.id))
             .where('seller_id', auth.user!.id)
+            .whereNull('deleted_at')
             .select('id', 'title', 'slug', 'bpm', 'duration', 'status', 'created_at')
             .preload('genres', (q) => q.select('id', 'name', 'slug'))
             .preload('moods', (q) => q.select('id', 'name', 'slug'))

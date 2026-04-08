@@ -56,7 +56,7 @@ export default class AuthController {
 
         const user = await User.query()
             .where('id', id)
-            .select('id', 'is_email_verified')
+            .select('id', 'is_email_verify')
             .firstOrFail()
 
         if (user.isEmailVerified) {

@@ -15,21 +15,34 @@ export default class AdminTracksController {
             )
         )
 
+        const currentPage = page ?? 1
+        const perPage = limit ?? 10
+
         const tracks = await Audio.query()
             .where('status', 'pending')
             .whereNull('deleted_at')
-            .select('id', 'seller_id', 'title', 'slug', 'bpm', 'duration', 'status', 'created_at')
+            .select('id', 'seller_id', 'title', 'slug', 'bpm', 'duration', 'created_at')
             .preload('seller', (q) => q.select('id', 'fullName', 'email'))
-            .preload('genres', (q) => q.select('id', 'name', 'slug'))
-            .preload('moods', (q) => q.select('id', 'name', 'slug'))
             .orderBy('created_at', 'desc')
-            .paginate(page ?? 1, limit ?? 10)
+            .limit(perPage)
+            .offset((currentPage - 1) * perPage)
+
+        // OPTIONAL: count (if you really need it)
+        const total = await Audio.query()
+            .where('status', 'pending')
+            .whereNull('deleted_at')
+            .count('* as total')
+            .first()
 
         return {
             success: true,
             message: i18n.t('message.track.pending_fetched'),
-            data: tracks.toJSON().data,
-            meta: tracks.toJSON().meta,
+            data: tracks,
+            meta: {
+                currentPage,
+                perPage,
+                total: total ? Number(total.$extras.total) : 0,
+            },
         }
     }
 
